@@ -72,7 +72,7 @@ class CoreDumpWriter(object):
         self.current_core_size = None
         self.saved_core_dumps = set()
         self.sparse = sparse
-        self.buffer = b""
+        self.buffer = ""
         self.total_size = 0
         self.total_disk_usage = 0
 
@@ -85,7 +85,7 @@ class CoreDumpWriter(object):
             while buffer_ptr + SPARSE_CORE_DUMP_PAGE_SIZE + 1 < len(self.buffer):
                 if self.buffer[buffer_ptr:buffer_ptr + 1] == b"0":
                     zero_block_length = 0
-                    for idx in range(buffer_ptr + 1 + UINT64_LENGTH, buffer_ptr, -1):
+                    for idx in xrange(buffer_ptr + 1 + UINT64_LENGTH, buffer_ptr, -1):
                         zero_block_length = 256 * zero_block_length + ord(self.buffer[idx:idx + 1])
                     self.current_file.seek(zero_block_length, 1)
                 else:

@@ -20,16 +20,12 @@ import yt.json_wrapper as json
 import yt.logger as logger
 from yt.yson import YsonString, YsonUnicode
 
-from abc import ABCMeta, abstractmethod
+from abc import ABCMeta, abstractmethod, Iterable
 from codecs import getwriter
-from collections.abc import Iterable
 import copy
 import struct
 import sys
-try:
-    from cStringIO import StringIO as BytesIO
-except ImportError:  # Python 3
-    from io import BytesIO
+from io import BytesIO
 
 try:
     from statbox_bindings2.string_utils import (
@@ -169,7 +165,6 @@ class Format(object):
        Abstract base class for different formats.
     """
     __metaclass__ = ABCMeta
-
     _COLUMN_KEY_DEFAULT_ENCODING = "utf-8"
 
     def __init__(self, name, attributes=None, raw=None, encoding=_ENCODING_SENTINEL):
@@ -356,7 +351,7 @@ class Format(object):
     @staticmethod
     def _process_input_rows(rows, control_attributes_mode,
                             extract_control_attributes, table_index_column_name, transform_column_name):
-        table_index_attribute_name, row_index_attribute_name, range_index_attribute_name, \
+        table_index_attribute_name, row_index_attribute_name, range_index_attribute_name,\
             key_switch_attribute_name, tablet_index_attribute_name = \
             list(map(transform_column_name, [b"table_index", b"row_index", b"range_index", b"key_switch", b"tablet_index"]))
 
@@ -587,7 +582,7 @@ class DsvFormat(Format):
         # it is likely that row will contain unicode key or value in Python 3
         # so bindings are disabled for Python 3.
         length = len(row)
-        for i, item in enumerate(row.items()):
+        for i, item in enumerate(iteritems(row)):
             stream.write(escape_key(convert_to_bytes(item[0])))
             stream.write(b"=")
             stream.write(escape_value(convert_to_bytes(item[1])))
@@ -641,7 +636,7 @@ class DsvFormat(Format):
             value = b"\\".join(map(lambda t: self._unescape(t, value_dict), value_tokens))
             return decode(key, value)
 
-        return dict(map(unescape_dsv_field, filter(None, string.strip(b"\n").split(b"\t"))))
+        return dict(map(unescape_dsv_field, ifilter(None, string.strip(b"\n").split(b"\t"))))
 
 
 class YsonFormat(Format):
@@ -1175,7 +1170,7 @@ class JsonFormat(Format):
             return dict([(self._load_python_string(key), self._decode(value)) for key, value in obj.items()])
         elif isinstance(obj, list):
             return list(map(self._decode, obj))
-        elif isinstance(obj, bytes) or isinstance(obj, str):
+        elif isinstance(obj, binary_type) or isinstance(obj, str):
             return self._load_python_string(obj)
         else:
             return obj
@@ -1215,7 +1210,7 @@ class JsonFormat(Format):
             return dict([(self._dump_python_string(key), self._encode(value)) for key, value in obj.items()])
         elif isinstance(obj, list):
             return list(map(self._encode, obj))
-        elif isinstance(obj, bytes) or isinstance(obj, str):
+        elif isinstance(obj, binary_type) or isinstance(obj, str):
             return self._dump_python_string(obj)
         else:
             return obj
@@ -1471,7 +1466,7 @@ class SchemafulDsvFormat(Format):
                 return field
             unescape_dict = {b'\\n': b'\n', b'\\r': b'\r', b'\\t': b'\t', b'\\0': b'\0'}
             return decode(b"\\".join(map(lambda token: self._unescape(token, unescape_dict),
-                                         field.split(b"\\\\"))))
+                                          field.split(b"\\\\"))))
 
         return dict(zip(map(self._coerce_column_key, self._columns),
                         map(unescape_field, line.rstrip(b"\n").split(b"\t"))))

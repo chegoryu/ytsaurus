@@ -9,6 +9,15 @@ import yt.yson as yson
 from copy import deepcopy
 import string
 
+from typing import Any
+
+from .client_impl import (
+    YtClient,
+)
+from .typing_hack import (
+    TAttributes,
+)
+
 
 class TokensByPath(object):
     def __init__(self, path):
@@ -22,7 +31,7 @@ class TokensByPath(object):
             self.slash = "/"
             self.double_slash = "//"
             self.sharp = "#"
-            self.raw_path = str(path)
+            self.raw_path = text(path)
             self.string_type = str
 
     def to_path_type(self, text):
@@ -33,24 +42,26 @@ def _process_prefix(path, prefix):
     tokens = TokensByPath(path)
     if prefix is not None:
         prefix = TokensByPath(prefix).raw_path
+
     if prefix is not None and type(tokens.raw_path) != type(prefix):
         raise YtError("Type mismatch of ypath %r and prefix %r" % (tokens.raw_path, prefix))
 
-    if tokens.raw_path == tokens.slash or tokens.raw_path.startswith(tokens.double_slash) or \
-            tokens.raw_path.startswith(tokens.sharp):
+    if (
+        tokens.raw_path == tokens.slash
+        or tokens.raw_path.startswith(tokens.double_slash)
+        or tokens.raw_path.startswith(tokens.sharp)
+    ):
         return path
     else:
-        require(prefix,
-                lambda: YtError("Path %r should be absolute or you should specify a prefix" % tokens.raw_path))
-        require(prefix.startswith("//"),
-                lambda: YtError("PREFIX %r should start with //" % prefix))
-        require(prefix.endswith("/"),
-                lambda: YtError("PREFIX %r should end with /" % prefix))
+        require(prefix, lambda: YtError("Path %r should be absolute or you should specify a prefix" % tokens.raw_path))
+        require(prefix.startswith("//"), lambda: YtError("PREFIX %r should start with //" % prefix))
+        require(prefix.endswith("/"), lambda: YtError("PREFIX %r should end with /" % prefix))
         return yson.to_yson_type(prefix + tokens.raw_path if tokens.raw_path else prefix[:-1], path.attributes)
 
 
 def ypath_join(*paths):
     """Joins parts of cypress paths."""
+
     def ends_with_slash(part):
         if part.endswith("/"):
             if part.endswith("\\/"):
@@ -84,9 +95,9 @@ def ypath_join(*paths):
 
 def ypath_split(path):
     """Splits the pathname path into a pair, (head, tail)
-       where tail is the last pathname component and head is everything leading up to that.
+    where tail is the last pathname component and head is everything leading up to that.
 
-       Equivalent of os.path.split for YPath.
+    Equivalent of os.path.split for YPath.
     """
     parsed_ypath = YPath(path)
 
@@ -137,14 +148,15 @@ def ypath_split(path):
     if slash_pos == len(path) - 1 and not slash_escaped:
         raise YtError('Unexpected "/" at the end of YPath')
 
-    return path[:slash_pos], path[slash_pos + 1:]
+    return path[:slash_pos], path[slash_pos + 1 :]
 
 
 def escape_ypath_literal(literal, encoding=_ENCODING_SENTINEL):
     """Escapes string to use it as key in ypath."""
+
     def escape_char(ch):
         if isinstance(ch, int):
-            ch = bytes([ch])
+            ch = binary_type([ch])
 
         assert isinstance(ch, bytes)
 
@@ -171,11 +183,14 @@ class YPath(object):
 
     .. seealso:: `YPath in the docs <https://ytsaurus.tech/docs/en/user-guide/storage/ypath>`_
     """
-    def __init__(self,
-                 path,
-                 simplify=None,
-                 attributes=None,
-                 client=None):
+
+    def __init__(
+        self,
+        path: "str | YPath",
+        simplify: bool | None = None,
+        attributes: dict[str, Any] | None = None,
+        client: YtClient | None = None,
+    ):
         """
         :param path: string representing cypress path, possible with YPath-encoded attributes.
         :param dict attributes: additional attributes.
@@ -218,13 +233,10 @@ class YPath(object):
         """Returns YSON path with attributes as string."""
         if self.attributes:
             attributes_str = yson._dumps_to_native_str(
-                self.attributes,
-                yson_type="map_fragment",
-                yson_format="text",
-                sort_keys=sort_keys)
+                self.attributes, yson_type="map_fragment", yson_format="text", sort_keys=sort_keys
+            )
             # NB: in text format \n can appear only as separator.
-            return "<{0}>{1}".format(
-                attributes_str.replace("\n", ""), str(self._path_object))
+            return "<{0}>{1}".format(attributes_str.replace("\n", ""), str(self._path_object))
         else:
             return str(self._path_object)
 
@@ -303,28 +315,31 @@ class TablePath(YPathSupportingAppend):
 
     .. seealso:: `YPath in the docs <https://ytsaurus.tech/docs/en/user-guide/storage/ypath>`_
     """
-    def __init__(self,
-                 # TODO(ignat): rename to path
-                 name,
-                 append=None,
-                 sorted_by=None,
-                 columns=None,
-                 exact_key=None,
-                 lower_key=None,
-                 upper_key=None,
-                 exact_index=None,
-                 start_index=None,
-                 end_index=None,
-                 ranges=None,
-                 schema=None,
-                 optimize_for=None,
-                 compression_codec=None,
-                 erasure_codec=None,
-                 foreign=None,
-                 rename_columns=None,
-                 simplify=None,
-                 attributes=None,
-                 client=None):
+
+    def __init__(
+        self,
+        # TODO(ignat): rename to path
+        name: str | YPath,
+        append: bool | None = None,
+        sorted_by: list[str] | None = None,
+        columns: list[str] | None = None,
+        exact_key: Any | None = None,
+        lower_key: Any | None = None,
+        upper_key: Any | None = None,
+        exact_index: int | None = None,
+        start_index: int | None = None,
+        end_index: int | None = None,
+        ranges: list[Any] | None = None,
+        schema: dict[str, Any] | None = None,
+        optimize_for: str | None = None,
+        compression_codec: str | None = None,
+        erasure_codec: str | None = None,
+        foreign: bool | None = None,
+        rename_columns: list[str] | None = None,
+        simplify: bool | None = None,
+        attributes: TAttributes | None = None,
+        client: YtClient | None = None,
+    ):
         """
         :param str name: path with attributes.
         :param bool append: append to table or overwrite.
@@ -379,13 +394,19 @@ class TablePath(YPathSupportingAppend):
             attributes["rename_columns"] = rename_columns
 
         if ranges is not None:
+
             def _check_option(value, option_name):
                 if value is not None:
                     raise YtError("Option '{0}' cannot be specified with 'ranges' option".format(option_name))
 
-            for value, name in [(exact_key, "exact_key"), (exact_index, "exact_index"),
-                                (lower_key, "lower_key"), (start_index, "start_index"),
-                                (upper_key, "upper_key"), (end_index, "end_index")]:
+            for value, name in [
+                (exact_key, "exact_key"),
+                (exact_index, "exact_index"),
+                (lower_key, "lower_key"),
+                (start_index, "start_index"),
+                (upper_key, "upper_key"),
+                (end_index, "end_index"),
+            ]:
                 _check_option(value, name)
 
             attributes["ranges"] = ranges
@@ -482,6 +503,7 @@ class TablePath(YPathSupportingAppend):
 
 class FilePath(YPathSupportingAppend):
     """YPath descendant to be used in file commands."""
+
     def __init__(self, path, append=None, executable=None, file_name=None, simplify=None, attributes=None, client=None):
         super(FilePath, self).__init__(path, attributes=attributes, simplify=simplify, append=append, client=client)
         if executable is not None:
@@ -492,7 +514,7 @@ class FilePath(YPathSupportingAppend):
 
 def ypath_dirname(path):
     """Returns path one level above specified `path`.
-       Equivalent of os.path.dirname for YPath.
+    Equivalent of os.path.dirname for YPath.
     """
 
     # Dropping ranges and attributes.

@@ -1,12 +1,12 @@
 import yt.logger as logger
+from .typing_hack import TAttributes
 from .config import get_config, get_option
 from .common import require, parse_bool, set_param, get_value, get_disk_size, MB, chunk_iter_stream, update
 from .compression import try_enable_parallel_write_gzip
 from .driver import get_command_list, make_formatted_request
 from .errors import YtError, YtResponseError, YtCypressTransactionLockConflict
 from .heavy_commands import make_write_request, make_read_request
-from .cypress_commands import (remove, exists, set_attribute, mkdir, find_free_subpath,
-                               create, link, get, set)
+from .cypress_commands import remove, exists, set_attribute, mkdir, find_free_subpath, create, link, get, set
 from .default_config import DEFAULT_WRITE_CHUNK_SIZE
 from .parallel_reader import make_read_parallel_request
 from .parallel_writer import make_parallel_write_request
@@ -21,15 +21,13 @@ from yt.yson import to_yson_type
 
 import os
 import hashlib
+import pathlib
 
-try:
-    from cStringIO import StringIO as BytesIO
-except ImportError:  # Python 3
-    from io import BytesIO
+from io import BytesIO
 
 
 # TODO(ignat): avoid copypaste (same function presented in py_wrapper.py)
-def md5sum(filename):
+def md5sum(filename: str | pathlib.Path):
     with open(filename, mode="rb") as fin:
         h = hashlib.md5()
         for buf in chunk_iter_stream(fin, 1024):
@@ -39,7 +37,13 @@ def md5sum(filename):
 
 class LocalFile(object):
     """Represents a local path of a file and its path in job's sandbox"""
-    def __init__(self, path, file_name=None, attributes=None):
+
+    def __init__(
+        self,
+        path: str | pathlib.Path | "LocalFile",
+        file_name: str | None = None,
+        attributes: TAttributes | None = None,
+    ):
         if isinstance(path, LocalFile):
             self._path = path.path
             self._file_name = path.file_name
@@ -56,10 +60,7 @@ class LocalFile(object):
         path_bytes = path.encode("utf-8")
 
         stream = BytesIO(path_bytes)
-        parser = YsonParser(
-            stream,
-            encoding="utf-8",
-            always_create_attributes=True)
+        parser = YsonParser(stream, encoding="utf-8", always_create_attributes=True)
 
         path_attributes = {}
         if parser._has_attributes():
@@ -79,15 +80,15 @@ class LocalFile(object):
         self._attributes = attributes
 
     @property
-    def path(self):
+    def path(self) -> str:
         return self._path
 
     @property
-    def file_name(self):
+    def file_name(self) -> str:
         return self._attributes["file_name"]
 
     @property
-    def attributes(self):
+    def attributes(self) -> TAttributes:
         return self._attributes
 
 
@@ -156,10 +157,8 @@ def read_file(path, file_reader=None, offset=None, length=None, enable_read_para
     if enable_read_parallel:
         data_size = get(path + "/@uncompressed_data_size", client=client)
         ranges = _prepare_ranges_for_parallel_read(
-            offset,
-            length,
-            data_size,
-            get_config(client)["read_parallel"]["data_size_per_thread"])
+            offset, length, data_size, get_config(client)["read_parallel"]["data_size_per_thread"]
+        )
         return make_read_parallel_request(
             "read_file",
             path,
@@ -168,7 +167,8 @@ def read_file(path, file_reader=None, offset=None, length=None, enable_read_para
             _prepare_params_for_parallel_read,
             unordered=False,
             response_parameters=None,
-            client=client)
+            client=client,
+        )
 
     return make_read_request(
         "read_file",
@@ -178,14 +178,19 @@ def read_file(path, file_reader=None, offset=None, length=None, enable_read_para
         retriable_state_class=_ReadFileRetriableState,
         client=client,
         filename_hint=str(path),
-        request_size=True)
+        request_size=True,
+    )
 
 
 def _enrich_with_attributes(path, client=None):
     """Fetches attributes of a given node and
-       returns `path` with these attributes."""
+    returns `path` with these attributes."""
     try:
-        attributes = get(path + "/@", attributes=["type", "schema", "optimize_for", "erasure_codec", "compression_codec"], client=client)
+        attributes = get(
+            path + "/@",
+            attributes=["type", "schema", "optimize_for", "erasure_codec", "compression_codec"],
+            client=client,
+        )
     except YtResponseError as err:
         if err.is_resolve_error():
             return path
@@ -196,14 +201,25 @@ def _enrich_with_attributes(path, client=None):
     elif attributes["type"] == "file":
         return FilePath(path, attributes=attributes, client=client)
     else:
-        raise YtError('Bad node type, expected "file" or "table", got "{}"'.format(
-            attributes["type"],
-        ))
+        raise YtError(
+            'Bad node type, expected "file" or "table", got "{}"'.format(
+                attributes["type"],
+            )
+        )
 
 
-def write_file(destination, stream,
-               file_writer=None, is_stream_compressed=False, force_create=None, compute_md5=False,
-               size_hint=None, filename_hint=None, progress_monitor=None, client=None):
+def write_file(
+    destination,
+    stream,
+    file_writer=None,
+    is_stream_compressed=False,
+    force_create=None,
+    compute_md5=False,
+    size_hint=None,
+    filename_hint=None,
+    progress_monitor=None,
+    client=None,
+):
     """Uploads file to destination path from stream on local machine.
 
     :param destination: destination path in Cypress.
@@ -243,7 +259,8 @@ def write_file(destination, stream,
                 "upload_replication_factor": 3,
                 "min_upload_replication_factor": 2,
             },
-            get_value(file_writer, {}))
+            get_value(file_writer, {}),
+        )
 
     params = {}
     set_param(params, "file_writer", file_writer)
@@ -258,8 +275,9 @@ def write_file(destination, stream,
 
     default_chunk_size = get_config(client)["write_retries"]["chunk_size"] or DEFAULT_WRITE_CHUNK_SIZE
     input_size_is_large = size_hint is not None and size_hint >= 2 * default_chunk_size
-    enable_parallel_write = config_enable_parallel_write == to_yson_type(True) \
-        or (config_enable_parallel_write is None and input_size_is_large)
+    enable_parallel_write = config_enable_parallel_write == to_yson_type(True) or (
+        config_enable_parallel_write is None and input_size_is_large
+    )
     if enable_parallel_write and get_config(client)["proxy"]["content_encoding"] == "gzip":
         enable_parallel_write = try_enable_parallel_write_gzip(config_enable_parallel_write)
 
@@ -277,7 +295,8 @@ def write_file(destination, stream,
             size_hint=size_hint,
             filename_hint=filename_hint,
             progress_monitor=progress_monitor,
-            client=client)
+            client=client,
+        )
     else:
         make_write_request(
             "write_file",
@@ -290,7 +309,8 @@ def write_file(destination, stream,
             size_hint=size_hint,
             filename_hint=filename_hint,
             progress_monitor=progress_monitor,
-            client=client)
+            client=client,
+        )
 
 
 def _get_remote_temp_files_directory(client=None):
@@ -315,17 +335,14 @@ class PutFileToCacheRetrier(Retrier):
             retry_config=retry_config,
             timeout=retries_timeout,
             exceptions=(YtCypressTransactionLockConflict,),
-            chaos_monkey=default_chaos_monkey(chaos_monkey_enable))
+            chaos_monkey=default_chaos_monkey(chaos_monkey_enable),
+        )
 
         self._params = params
         self._client = client
 
     def action(self):
-        return make_formatted_request(
-            "put_file_to_cache",
-            self._params,
-            format=None,
-            client=self._client)
+        return make_formatted_request("put_file_to_cache", self._params, format=None, client=self._client)
 
 
 def put_file_to_cache(path, md5, cache_path=None, client=None):
@@ -339,10 +356,7 @@ def put_file_to_cache(path, md5, cache_path=None, client=None):
     cache_path = get_value(cache_path, _get_cache_path(client))
     create("map_node", cache_path, ignore_existing=True, recursive=True, client=client)
 
-    params = {
-        "path": path,
-        "md5": md5,
-        "cache_path": cache_path}
+    params = {"path": path, "md5": md5, "cache_path": cache_path}
 
     retrier = PutFileToCacheRetrier(params, client)
     return retrier.run()
@@ -356,9 +370,7 @@ def get_file_from_cache(md5, cache_path=None, client=None):
     :return: path to file in Cypress if it was found in cache and YsonEntity otherwise
     """
     cache_path = get_value(cache_path, _get_cache_path(client))
-    params = {
-        "md5": md5,
-        "cache_path": cache_path}
+    params = {"md5": md5, "cache_path": cache_path}
 
     return make_formatted_request("get_file_from_cache", params, format=None, client=client)
 
@@ -405,9 +417,8 @@ def _upload_file_to_cache_legacy(filename, hash, client=None):
     if should_upload_file:
         logger.debug("Link %s of file %s missing, uploading file", destination, filename)
         prefix = ypath_join(
-            _get_remote_temp_files_directory(client),
-            last_two_digits_of_hash,
-            os.path.basename(filename))
+            _get_remote_temp_files_directory(client), last_two_digits_of_hash, os.path.basename(filename)
+        )
         # NB: In local mode we have only one node and default replication factor equal to one for all tables and files.
         if is_local_mode(client) or get_option("_is_testing_mode", client=client):
             replication_factor = 1
@@ -416,20 +427,18 @@ def _upload_file_to_cache_legacy(filename, hash, client=None):
                 raise YtError("File cache replication factor cannot be set less than 3")
             replication_factor = get_config(client)["file_cache"]["replication_factor"]
         real_destination = find_free_subpath(prefix, client=client)
-        attributes = {
-            "hash": hash,
-            "touched": True,
-            "replication_factor": replication_factor
-        }
+        attributes = {"hash": hash, "touched": True, "replication_factor": replication_factor}
 
-        create("file",
-               real_destination,
-               recursive=True,
-               attributes=attributes,
-               client=client)
+        create("file", real_destination, recursive=True, attributes=attributes, client=client)
         write_file(real_destination, open(filename, "rb"), force_create=False, client=client)
-        link(real_destination, destination, recursive=True, ignore_existing=True,
-             attributes={"touched": True}, client=client)
+        link(
+            real_destination,
+            destination,
+            recursive=True,
+            ignore_existing=True,
+            attributes={"touched": True},
+            client=client,
+        )
 
     return destination
 
@@ -440,9 +449,9 @@ def upload_file_to_cache(filename, hash=None, progress_monitor=None, client=None
 
     use_legacy = get_config(client)["use_legacy_file_cache"]
     if use_legacy is None:
-        use_legacy = \
-            "put_file_to_cache" not in get_command_list(client) or \
-            "get_file_from_cache" not in get_command_list(client)
+        use_legacy = "put_file_to_cache" not in get_command_list(
+            client
+        ) or "get_file_from_cache" not in get_command_list(client)
 
     if use_legacy:
         return _upload_file_to_cache_legacy(filename, hash, client=client)
@@ -465,11 +474,9 @@ def upload_file_to_cache(filename, hash=None, progress_monitor=None, client=None
             raise YtError("File cache replication factor cannot be set less than 3")
         replication_factor = get_config(client)["file_cache"]["replication_factor"]
 
-    create("file",
-           real_destination,
-           recursive=True,
-           attributes={"replication_factor": replication_factor},
-           client=client)
+    create(
+        "file", real_destination, recursive=True, attributes={"replication_factor": replication_factor}, client=client
+    )
     with open(filename, "rb") as stream:
         if progress_monitor is None:
             size_hint = get_disk_size(filename, round=False)
@@ -477,9 +484,16 @@ def upload_file_to_cache(filename, hash=None, progress_monitor=None, client=None
         else:
             size_hint = None
             filename_hint = None
-        write_file(real_destination, stream, compute_md5=True, force_create=False,
-                   size_hint=size_hint, filename_hint=filename_hint, progress_monitor=progress_monitor,
-                   client=client)
+        write_file(
+            real_destination,
+            stream,
+            compute_md5=True,
+            force_create=False,
+            size_hint=size_hint,
+            filename_hint=filename_hint,
+            progress_monitor=progress_monitor,
+            client=client,
+        )
 
     destination = put_file_to_cache(real_destination, hash, client=client)
     remove(real_destination, force=True, client=client)
@@ -490,9 +504,9 @@ def upload_file_to_cache(filename, hash=None, progress_monitor=None, client=None
 def _touch_file_in_cache(filepath, client=None):
     use_legacy = get_config(client)["use_legacy_file_cache"]
     if use_legacy is None:
-        use_legacy = \
-            "put_file_to_cache" not in get_command_list(client) or \
-            "get_file_from_cache" not in get_command_list(client)
+        use_legacy = "put_file_to_cache" not in get_command_list(
+            client
+        ) or "get_file_from_cache" not in get_command_list(client)
 
     if use_legacy:
         try:
@@ -505,8 +519,15 @@ def _touch_file_in_cache(filepath, client=None):
         get_file_from_cache(hash, client=client)
 
 
-def smart_upload_file(filename, destination=None, yt_filename=None, placement_strategy=None,
-                      ignore_set_attributes_error=True, hash=None, client=None):
+def smart_upload_file(
+    filename,
+    destination=None,
+    yt_filename=None,
+    placement_strategy=None,
+    ignore_set_attributes_error=True,
+    hash=None,
+    client=None,
+):
     """Uploads file to destination path with custom placement strategy.
 
     :param str filename: path to file on local machine.
@@ -532,17 +553,20 @@ def smart_upload_file(filename, destination=None, yt_filename=None, placement_st
     """
 
     def upload_with_check(path):
-        require(not exists(path, client=client),
-                lambda: YtError("Cannot upload file to '{0}', node already exists".format(path)))
+        require(
+            not exists(path, client=client),
+            lambda: YtError("Cannot upload file to '{0}', node already exists".format(path)),
+        )
         write_file(path, open(filename, "rb"), client=client)
 
-    require(os.path.isfile(filename),
-            lambda: YtError("Upload: %s should be file" % filename))
+    require(os.path.isfile(filename), lambda: YtError("Upload: %s should be file" % filename))
 
     if placement_strategy is None:
         placement_strategy = "hash"
-    require(placement_strategy in ["replace", "ignore", "random", "hash"],
-            lambda: YtError("Incorrect file placement strategy " + placement_strategy))
+    require(
+        placement_strategy in ["replace", "ignore", "random", "hash"],
+        lambda: YtError("Incorrect file placement strategy " + placement_strategy),
+    )
 
     executable = os.access(filename, os.X_OK) or get_config(client)["yamr_mode"]["always_set_executable_flag_on_files"]
 
@@ -587,7 +611,4 @@ def smart_upload_file(filename, destination=None, yt_filename=None, placement_st
             else:
                 raise
 
-    return to_yson_type(
-        destination,
-        {"file_name": yt_filename,
-         "executable": executable})
+    return to_yson_type(destination, {"file_name": yt_filename, "executable": executable})

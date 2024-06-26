@@ -21,10 +21,13 @@ def _get_compression_ratio(table, erasure_codec, compression_codec, optimize_for
 
     logger.debug("Compress sample of '%s' to calculate compression ratio", table)
     with TempTable(prefix="compute_compression_ratio", client=client) as tmp:
-        spec = update(deepcopy(spec), {
-            "title": "Merge to calculate compression ratio",
-            "force_transform": True,
-        })
+        spec = update(
+            deepcopy(spec),
+            {
+                "title": "Merge to calculate compression ratio",
+                "force_transform": True,
+            },
+        )
         if compression_codec is not None:
             set(tmp + "/@compression_codec", compression_codec, client=client)
 
@@ -40,13 +43,18 @@ def _get_compression_ratio(table, erasure_codec, compression_codec, optimize_for
         random_gen = Random()
         random_gen.seed(chunk_count)
         chunk_indices = random_gen.sample(range(chunk_count), min(chunk_count, probe_chunk_count))
-        input = TablePath(table,
-                          ranges=builtins.list(map(exact_chunk_index_limit, chunk_indices)),
-                          client=client)
+        input = TablePath(table, ranges=builtins.list(map(exact_chunk_index_limit, chunk_indices)), client=client)
 
         run_merge(input, tmp, mode="ordered", spec=spec, client=client)
         ratio = get(tmp + "/@compression_ratio", client=client)
-        logger.debug("Estimated compression ratio of '%s' (codec: %s, erasure: %s, optimize: %s) is %s", table, compression_codec, erasure_codec, optimize_for, ratio)
+        logger.debug(
+            "Estimated compression ratio of '%s' (codec: %s, erasure: %s, optimize: %s) is %s",
+            table,
+            compression_codec,
+            erasure_codec,
+            optimize_for,
+            ratio,
+        )
         return None if ratio < 0.00001 else ratio
 
 
@@ -64,8 +72,18 @@ def _check_codec(table, codec_name, codec_value, client):
                 raise
 
 
-def transform(source_table, destination_table=None, erasure_codec=None, compression_codec=None,
-              desired_chunk_size=None, spec=None, check_codecs=False, optimize_for=None, force_empty=False, client=None):
+def transform(
+    source_table,
+    destination_table=None,
+    erasure_codec=None,
+    compression_codec=None,
+    desired_chunk_size=None,
+    spec=None,
+    check_codecs=False,
+    optimize_for=None,
+    force_empty=False,
+    client=None,
+):
     """Transforms source table to destination table writing data with given compression and erasure codecs.
 
     Automatically calculates desired chunk size and data size per job. Also can be used to convert chunks in
@@ -109,21 +127,27 @@ def transform(source_table, destination_table=None, erasure_codec=None, compress
 
         src_attributes = get(src, attributes=["row_count", "dynamic", "chunk_row_count"], client=client).attributes
         if not force_empty and (
-            src_attributes.get("row_count") == 0 or
-            src_attributes.get("dynamic") and
-            src_attributes.get("chunk_row_count") == 0
+            src_attributes.get("row_count") == 0
+            or src_attributes.get("dynamic")
+            and src_attributes.get("chunk_row_count") == 0
         ):
             logger.debug("Table %s is empty", src)
             return False
 
-        if check_codecs and \
-                _check_codec(dst, "compression", compression_codec, client=client) and \
-                _check_codec(dst, "erasure", erasure_codec, client=client) and \
-                _check_codec(dst, "optimize_for", optimize_for, client=client):
+        if (
+            check_codecs
+            and _check_codec(dst, "compression", compression_codec, client=client)
+            and _check_codec(dst, "erasure", erasure_codec, client=client)
+            and _check_codec(dst, "optimize_for", optimize_for, client=client)
+        ):
             logger.info("Table %s already has proper codecs", dst)
             return False
 
-        ratio = _get_compression_ratio(src, erasure_codec, compression_codec, optimize_for, spec=spec, client=client) if compression_codec is not None else None
+        ratio = (
+            _get_compression_ratio(src, erasure_codec, compression_codec, optimize_for, spec=spec, client=client)
+            if compression_codec is not None
+            else None
+        )
 
         if ratio is None:
             ratio = get(src + "/@compression_ratio", client=client)
@@ -134,7 +158,7 @@ def transform(source_table, destination_table=None, erasure_codec=None, compress
         else:
             data_size_per_job = max(1, min(max_data_size_per_job, int(desired_chunk_size / ratio)))
             # force "one job - one chunk" mode (real chunk size based on data_size_per_job)
-            desired_chunk_size = desired_chunk_size * 2 + 1024 ** 3
+            desired_chunk_size = desired_chunk_size * 2 + 1024**3
 
         spec = update(
             {
@@ -142,13 +166,10 @@ def transform(source_table, destination_table=None, erasure_codec=None, compress
                 "combine_chunks": True,
                 "force_transform": True,
                 "data_size_per_job": data_size_per_job,
-                "job_io": {
-                    "table_writer": {
-                        "desired_chunk_size": desired_chunk_size
-                    }
-                },
+                "job_io": {"table_writer": {"desired_chunk_size": desired_chunk_size}},
             },
-            spec)
+            spec,
+        )
 
         if job_splitting is not None:
             spec.update({"enable_job_splitting": job_splitting})

@@ -1,16 +1,18 @@
 from .config import get_config
 from .schema.types import typing  # noqa
 
+from typing import Any
+
 import yt.logger as logger
 
-try:
-    import yt.packages.distro as distro
-except ImportError:
-    import distro
+import distro
 
 import platform
 
 from urllib.parse import urlparse
+
+from .client_impl import YtClient
+from .typing_hack import TBaseLayerType
 
 
 class BaseLayerDetector:
@@ -32,7 +34,7 @@ class BaseLayerDetector:
     }
 
     @classmethod
-    def _detect_os_env(cls):
+    def _detect_os_env(cls) -> tuple[str, str, tuple[int, int] | None] | None:
         # type: () -> typing.Tuple[str, str, typing.Tuple[int, int] | None] | None
         # ("<os>", "<os_codename>", (custom_python_major, custom_python_minor))
         python_major, python_minor = map(int, platform.python_version_tuple()[:2])
@@ -48,7 +50,7 @@ class BaseLayerDetector:
         return None
 
     @classmethod
-    def _get_default_layer(cls, client, layer_type):
+    def _get_default_layer(cls, client: YtClient, layer_type: TBaseLayerType) -> list[str] | None:
         # type: (yt.wrapper.YtClient, typing.Literal["porto", "docker"]) -> typing.List[str] | None
 
         def _filter_registry(registry_dict, os=None, tags=None):
@@ -76,7 +78,7 @@ class BaseLayerDetector:
                 )
             )
 
-        def _select_registry(registry_dict):
+        def _select_registry(registry_dict: dict[str, Any]):
             # type: (typing.Dict[str, dict]) -> typing.Tuple[str, dict] | None
             if registry_dict:
                 layer_path = min(registry_dict.keys())
@@ -137,7 +139,7 @@ class BaseLayerDetector:
         return layer_path
 
     @classmethod
-    def guess_base_layers(cls, spec, client):
+    def guess_base_layers(cls, spec: dict[str, Any], client: YtClient) -> dict[str, Any]:
         # type: (dict, yt.YtClient) -> dict
 
         user_layer = get_config(client)["operation_base_layer"]

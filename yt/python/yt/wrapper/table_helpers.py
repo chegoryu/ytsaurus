@@ -3,11 +3,11 @@ from __future__ import print_function
 from . import py_wrapper
 
 from .batch_helpers import batch_apply, create_batch_client
-from .common import (NullContext, update, get_value, chunk_iter_stream, require, get_disk_size,  # noqa
-                     is_of_iterable_type, flatten, typing)  # noqa
+from .common import (NullContext, update, get_value, chunk_iter_stream, require, get_disk_size,
+                     is_of_iterable_type, flatten, typing)
 from .config import get_config
 from .errors import YtError
-from .format import create_format, YsonFormat, YamrFormat, SkiffFormat, Format  # noqa
+from .format import create_format, YsonFormat, YamrFormat, SkiffFormat, Format
 from .ypath import TablePath
 from .cypress_commands import exists, get, get_attribute, remove
 from .transaction_commands import abort_transaction
@@ -25,10 +25,7 @@ import time
 import types
 from copy import deepcopy
 
-try:
-    from cStringIO import StringIO as BytesIO
-except ImportError:  # Python 3
-    from io import BytesIO
+from io import BytesIO
 
 import itertools
 
@@ -55,6 +52,7 @@ def _to_chunk_stream(stream, format, raw, split_rows, chunk_size, rows_chunk_siz
     #     [b'<rec2>', b'<row2>', b'<row3>'...]
     #   !`split_rows` - group rows by `rows_chunk_size` (number, not bytes)
     #     [b'<rec2>,<row2>', b'<row3>,<row4', ...]
+
     if isinstance(stream, (str, bytes)):
         if isinstance(stream, str):
             try:

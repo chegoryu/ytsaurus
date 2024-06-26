@@ -1,6 +1,6 @@
 from .config import get_config, get_option, set_option
 from .common import require, generate_int64, update, get_value
-from .constants import RPC_PACKAGE_INSTALLATION_TEXT, ENABLE_YP_SERVICE_DISCOVERY
+from .constants import RPC_PACKAGE_INSTALLATION_TEXT
 from .errors import create_response_error, YtError
 from .string_iter_io import StringIterIO
 from .response_stream import ResponseStream
@@ -10,10 +10,7 @@ import yt.logger as logger
 import yt.logger_config as logger_config
 import yt.yson as yson
 
-try:
-    from cStringIO import StringIO as BytesIO
-except ImportError:  # Python 3
-    from io import BytesIO
+from io import BytesIO
 
 
 driver_bindings = None
@@ -134,7 +131,7 @@ def configure_yp_service_discovery(yp_service_discovery_config, client):
     elif yp_service_discovery_config is not None:
         driver_bindings.configure_yp_service_discovery(yp_service_discovery_config)
     else:
-        driver_bindings.configure_yp_service_discovery({"enable": ENABLE_YP_SERVICE_DISCOVERY})
+        driver_bindings.configure_yp_service_discovery({})
 
     yp_service_discovery_configured = True
 

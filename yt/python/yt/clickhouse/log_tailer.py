@@ -1,9 +1,6 @@
 import yt.logger as logger
 
-try:
-    from yt.packages.six import iteritems
-except ImportError:
-    from six import iteritems
+from six import iteritems
 
 from yt.wrapper.dynamic_table_commands import mount_table, unmount_table, reshard_table
 from yt.wrapper.cypress_commands import exists, create, set, get
@@ -11,10 +8,7 @@ from yt.yson import YsonUint64
 
 from yt.wrapper.common import update_inplace
 
-try:
-    from yt.packages.six.moves import xrange
-except ImportError:
-    from six.moves import xrange
+from six.moves import xrange
 
 from yt.wrapper import YtClient
 import yt.wrapper.config

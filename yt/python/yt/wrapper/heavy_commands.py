@@ -1,5 +1,5 @@
 from .config import get_option, get_config, get_command_param
-from .common import YtError, MB, typing  # noqa
+from .common import YtError, MB, typing
 from .cypress_commands import get
 from .default_config import DEFAULT_WRITE_CHUNK_SIZE
 from .driver import make_request
@@ -16,7 +16,7 @@ from .format import YtFormatReadError
 
 import yt.logger as logger
 
-from yt.common import join_exceptions, YT_NULL_TRANSACTION_ID as null_transaction_id
+from yt.common import join_exceptions
 
 import sys
 import time
@@ -81,9 +81,6 @@ def process_read_exception(exception):
 
 
 class FakeTransaction(object):
-    def __init__(self):
-        self.transaction_id = null_transaction_id
-
     def __enter__(self):
         return self
 
@@ -184,7 +181,7 @@ def make_write_request(command_name, stream, path, params, create_object, use_re
                 if chunk_size is None:
                     chunk_size = DEFAULT_WRITE_CHUNK_SIZE
 
-                write_action = lambda chunk, params: make_request(  # noqa
+                write_action = lambda chunk, params: make_request(
                     command_name,
                     params,
                     data=progress_reporter.wrap_stream(chunk),
@@ -224,7 +221,7 @@ def make_write_request(command_name, stream, path, params, create_object, use_re
 
 
 def _get_read_response(command_name, params, transaction_id, client=None):
-    make_read_request = lambda: make_request(  # noqa
+    make_read_request = lambda: make_request(
         command_name,
         params,
         return_content=False,

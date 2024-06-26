@@ -1,6 +1,6 @@
 """YT usage errors"""
 
-from .common import hide_auth_headers_in_request_info, hide_auth_headers
+from .common import hide_auth_headers_in_request_info
 
 import yt.common
 
@@ -11,7 +11,7 @@ from yt.yson import yson_to_json
 
 class YtOperationFailedError(YtError):
     """Operation failed during waiting completion."""
-    def __init__(self, id, state, error, stderrs, url):
+    def __init__(self, id: str, state: str, error, stderrs, url: str):
         message = "Operation {0} {1}".format(id, state)
         attributes = {
             "id": id,
@@ -106,6 +106,12 @@ def create_http_response_error(underlying_error, url, request_headers, response_
         "transparent": True})
     error.attributes.update(attributes)
     return error
+
+
+class YtRequestRateLimitExceeded(YtResponseError):
+    """Request rate limit exceeded error.
+       It is used in retries."""
+    pass
 
 
 class YtRequestQueueSizeLimitExceeded(YtResponseError):
@@ -228,7 +234,7 @@ class YtIncorrectResponse(YtError):
         self.response = response
         attributes = {
             "url": response.url,
-            "headers": hide_auth_headers(response.headers),
+            "headers": response.headers,
             "request_info": hide_auth_headers_in_request_info(response.request_info),
             "body": self.truncate(response.text)}
         super(YtIncorrectResponse, self).__init__(message, attributes=attributes)

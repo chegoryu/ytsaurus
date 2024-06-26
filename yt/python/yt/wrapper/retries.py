@@ -9,22 +9,14 @@ import time
 from datetime import datetime, timedelta
 
 
-def run_with_retries(
-    action, retry_count=6, backoff=20.0, exceptions=(YtError,), except_action=None,
-    backoff_action=None, additional_retriable_error_codes=None
-):
-    if additional_retriable_error_codes is None:
-        additional_retriable_error_codes = []
-
+def run_with_retries(action, retry_count=6, backoff=20.0, exceptions=(YtError,), except_action=None,
+                     backoff_action=None):
     class SimpleRetrier(Retrier):
         def __init__(self):
-            retry_config = {
-                "enable": True,
-                "count": retry_count,
-                "total_timeout": None,
-                "backoff": {"policy": "rounded_up_to_request_timeout"},
-                "additional_retriable_error_codes": additional_retriable_error_codes,
-            }
+            retry_config = {"enable": True,
+                            "count": retry_count,
+                            "total_timeout": None,
+                            "backoff": {"policy": "rounded_up_to_request_timeout"}}
             super(SimpleRetrier, self).__init__(retry_config, backoff * 1000.0, exceptions)
             self.exception = None
 
@@ -60,10 +52,8 @@ def run_chaos_monkey(chaos_monkey):
 
 
 class Retrier(object):
-    def __init__(
-        self, retry_config, timeout=None, exceptions=(YtError,),
-        ignore_exceptions=tuple(), chaos_monkey=None, logger=None
-    ):
+    def __init__(self, retry_config,
+                 timeout=None, exceptions=(YtError,), ignore_exceptions=tuple(), chaos_monkey=None, logger=None):
         self.retry_config = copy.deepcopy(retry_config)
         self.exceptions = exceptions
         self.ignore_exceptions = ignore_exceptions

@@ -17,10 +17,7 @@ Options:
 
 import yt.wrapper.client
 
-try:
-    from expiringdict import ExpiringDict
-except ImportError:
-    from yt.packages.expiringdict import ExpiringDict
+from yt.packages.expiringdict import ExpiringDict
 
 import yt.packages.fuse as fuse
 import yt.packages.requests as requests

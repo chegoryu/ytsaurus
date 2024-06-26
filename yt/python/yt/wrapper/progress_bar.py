@@ -1,9 +1,6 @@
 from yt.common import update
 
-try:
-    from yt.packages import tqdm
-except ImportError:
-    import tqdm
+import tqdm
 
 import os
 

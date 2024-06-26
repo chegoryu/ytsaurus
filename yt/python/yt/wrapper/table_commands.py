@@ -1,21 +1,50 @@
-from .common import (flatten, require, update, get_value, set_param, datetime_to_string,
-                     MB, chunk_iter_stream, deprecated, merge_blobs_by_size, typing, utcnow)
+import pathlib
+from .common import (
+    flatten,
+    require,
+    update,
+    get_value,
+    set_param,
+    datetime_to_string,
+    MB,
+    chunk_iter_stream,
+    deprecated,
+    merge_blobs_by_size,
+    typing,
+    utcnow,
+)
 from .compression import try_enable_parallel_write_gzip
 from .config import get_config, get_option
-from .constants import YSON_PACKAGE_INSTALLATION_TEXT
-from .cypress_commands import (exists, remove, get_attribute, copy,
-                               move, mkdir, find_free_subpath, create, get, has_attribute)
+from .cypress_commands import (
+    exists,
+    remove,
+    get_attribute,
+    copy,
+    move,
+    mkdir,
+    find_free_subpath,
+    create,
+    get,
+    has_attribute,
+)
 from .default_config import DEFAULT_WRITE_CHUNK_SIZE
 from .driver import make_request, make_formatted_request
 from .retries import default_chaos_monkey, run_chaos_monkey
 from .errors import YtIncorrectResponse, YtError, YtResponseError
-from .format import create_format, YsonFormat, StructuredSkiffFormat, Format  # noqa
+from .format import create_format, YsonFormat, StructuredSkiffFormat, Format
 from .batch_response import apply_function_to_result
 from .heavy_commands import make_write_request, make_read_request
 from .parallel_writer import make_parallel_write_request
 from .response_stream import EmptyResponseStream, ResponseStreamWithReadRow
-from .table_helpers import (_prepare_source_tables, _are_default_empty_table, _prepare_table_writer,
-                            _remove_tables, DEFAULT_EMPTY_TABLE, _to_chunk_stream, _prepare_command_format)
+from .table_helpers import (
+    _prepare_source_tables,
+    _are_default_empty_table,
+    _prepare_table_writer,
+    _remove_tables,
+    DEFAULT_EMPTY_TABLE,
+    _to_chunk_stream,
+    _prepare_command_format,
+)
 from .file_commands import _get_remote_temp_files_directory, _enrich_with_attributes
 from .parallel_reader import make_read_parallel_request
 from .schema import _SchemaRuntimeCtx, TableSchema
@@ -28,6 +57,15 @@ import yt.logger as logger
 import builtins
 from copy import deepcopy
 from datetime import timedelta
+
+from .client_impl import (
+    YtClient,
+)
+from .typing_hack import (
+    TPath,
+    TAttributes,
+    TTablePath,
+)
 
 # Auxiliary methods
 
@@ -63,11 +101,12 @@ def _get_format_from_tables(tables, ignore_unexisting_tables):
             return yson.dumps(format._name)
         return repr(None)
 
-    require(len(set(format_repr(format) for format in formats)) == 1,
-            lambda: YtError("Tables have different attribute _format: " + repr(formats)))
+    require(
+        len(set(format_repr(format) for format in formats)) == 1,
+        lambda: YtError("Tables have different attribute _format: " + repr(formats)),
+    )
 
     return formats[0]
-
 
 def _merge_with_create_table_default_attributes(attributes, client):
     attributes = get_value(attributes, {})
@@ -87,8 +126,7 @@ def _create_table(path, recursive=None, ignore_existing=False, attributes=None, 
 
 
 @deprecated(alternative='"create" with "table" type')
-def create_table(path, recursive=None, ignore_existing=False,
-                 attributes=None, client=None):
+def create_table(path, recursive=None, ignore_existing=False, attributes=None, client=None):
     """Creates empty table. Shortcut for `create("table", ...)`.
 
     :param path: path to table.
@@ -104,7 +142,13 @@ def create_table(path, recursive=None, ignore_existing=False,
     return _create_table(path, recursive, ignore_existing, attributes, client)
 
 
-def create_temp_table(path=None, prefix=None, attributes=None, expiration_timeout=None, client=None):
+def create_temp_table(
+    path: TPath | None = None,
+    prefix: str | None = None,
+    attributes: TAttributes | None = None,
+    expiration_timeout: int | None = None,
+    client: YtClient | None = None,
+) -> str:
     """Creates temporary table by given path with given prefix and return name.
 
     :param path: existing path, by default ``yt.wrapper.config["remote_temp_tables_directory"]``.
@@ -126,12 +170,9 @@ def create_temp_table(path=None, prefix=None, attributes=None, expiration_timeou
         if not path.endswith("/"):
             path = path + "/"
     name = find_free_subpath(path, client=client)
-    expiration_timeout = get_value(expiration_timeout,
-                                   get_config(client)["temp_expiration_timeout"])
+    expiration_timeout = get_value(expiration_timeout, get_config(client)["temp_expiration_timeout"])
     timeout = timedelta(milliseconds=expiration_timeout)
-    attributes = update(
-        {"expiration_time": datetime_to_string(utcnow() + timeout)},
-        get_value(attributes, {}))
+    attributes = update({"expiration_time": datetime_to_string(utcnow() + timeout)}, get_value(attributes, {}))
     _create_table(name, attributes=attributes, client=client)
     return name
 
@@ -215,18 +256,17 @@ def write_table(
     is_input_stream_str = isinstance(input_stream, (str, bytes))
     can_split_input = (isinstance(input_stream, typing.Iterable) and not is_input_stream_filelike and not is_input_stream_str) \
         or format.is_raw_load_supported()
-    enable_retries = get_config(client)["write_retries"]["enable"] and \
-        can_split_input and \
-        not is_stream_compressed
+    enable_retries = get_config(client)["write_retries"]["enable"] and can_split_input and not is_stream_compressed
     if get_config(client)["write_retries"]["enable"] and not can_split_input:
         logger.warning("Cannot split input into rows. Write is processing by one request.")
 
     config_enable_parallel_write = get_config(client)["write_parallel"]["enable"]
-    enable_parallel_write = \
-        config_enable_parallel_write and \
-        can_split_input and \
-        not is_stream_compressed and \
-        "sorted_by" not in table.attributes
+    enable_parallel_write = (
+        config_enable_parallel_write
+        and can_split_input
+        and not is_stream_compressed
+        and "sorted_by" not in table.attributes
+    )
     if enable_parallel_write and get_config(client)["proxy"]["content_encoding"] == "gzip":
         enable_parallel_write = try_enable_parallel_write_gzip(config_enable_parallel_write)
 
@@ -236,7 +276,8 @@ def write_table(
         raw,
         split_rows=(enable_retries or enable_parallel_write),
         chunk_size=chunk_size,
-        rows_chunk_size=get_config(client)["write_retries"]["rows_chunk_size"])
+        rows_chunk_size=get_config(client)["write_retries"]["rows_chunk_size"],
+    )
 
     if enable_parallel_write:
         force_create = True
@@ -249,7 +290,8 @@ def write_table(
             get_config(client)["write_parallel"]["unordered"],
             prepare_table,
             _get_remote_temp_files_directory(client),
-            client=client)
+            client=client,
+        )
     else:
         make_write_request(
             "write_table",
@@ -259,7 +301,8 @@ def write_table(
             prepare_table,
             use_retries=enable_retries,
             is_stream_compressed=is_stream_compressed,
-            client=client)
+            client=client,
+        )
 
     if get_config(client)["yamr_mode"]["delete_empty_tables"] and is_empty(table, client=client):
         _remove_tables([table], client=client)
@@ -288,8 +331,9 @@ def _try_infer_schema(table, row_type):
     table.attributes["schema"] = schema
 
 
-def write_table_structured(table, row_type, input_stream, table_writer=None, max_row_buffer_size=None,
-                           force_create=None, client=None):
+def write_table_structured(
+    table, row_type, input_stream, table_writer=None, max_row_buffer_size=None, force_create=None, client=None
+):
     """Writes rows from input_stream to table in structured format. Cf. docstring for write_table"""
     table = TablePath(table, client=client)
     schema = _try_get_schema(table, client=client)
@@ -300,7 +344,11 @@ def write_table_structured(table, row_type, input_stream, table_writer=None, max
         table,
         input_stream,
         format=StructuredSkiffFormat(
-            [_SchemaRuntimeCtx().set_validation_mode_from_config(get_config(client)).create_row_py_schema(row_type, schema)],
+            [
+                _SchemaRuntimeCtx()
+                .set_validation_mode_from_config(get_config(client))
+                .create_row_py_schema(row_type, schema)
+            ],
             for_reading=False,
         ),
         table_writer=table_writer,
@@ -320,7 +368,7 @@ def _prepare_table_path_for_read_blob_table(table, part_index_column_name, clien
         raise YtError('Table should be sorted by "{0}"'.format(part_index_column_name))
 
     table.canonize_exact_ranges()
-    required_keys = sorted_by[:sorted_by.index(part_index_column_name)]
+    required_keys = sorted_by[: sorted_by.index(part_index_column_name)]
 
     if not table.ranges:
         if required_keys:
@@ -336,8 +384,8 @@ def _prepare_table_path_for_read_blob_table(table, part_index_column_name, clien
     if "lower_limit" not in range:
         if required_keys:
             raise YtError(
-                "Lower limit should consist of columns from the list {0}"
-                .format(sorted_by[:len(required_keys)]))
+                "Lower limit should consist of columns from the list {0}".format(sorted_by[: len(required_keys)])
+            )
         range["lower_limit"] = {"key": [0]}
         return table
 
@@ -345,7 +393,7 @@ def _prepare_table_path_for_read_blob_table(table, part_index_column_name, clien
         raise YtError("Only ranges with keys are supported")
 
     if len(range["lower_limit"]["key"]) != len(required_keys):
-        raise YtError("Key should consist of columns from the list {0}".format(sorted_by[:len(required_keys)]))
+        raise YtError("Key should consist of columns from the list {0}".format(sorted_by[: len(required_keys)]))
 
     range["lower_limit"]["key"].append(0)
     return table
@@ -373,8 +421,9 @@ class _ReadBlobTableRetriableState(object):
             yield chunk
 
 
-def read_blob_table(table, part_index_column_name=None, data_column_name=None,
-                    part_size=None, table_reader=None, client=None):
+def read_blob_table(
+    table, part_index_column_name=None, data_column_name=None, part_size=None, table_reader=None, client=None
+):
     """Reads file from blob table.
 
     :param table: table to read.
@@ -405,7 +454,7 @@ def read_blob_table(table, part_index_column_name=None, data_column_name=None,
         "path": table,
         "part_index_column_name": part_index_column_name,
         "data_column_name": data_column_name,
-        "part_size": part_size
+        "part_size": part_size,
     }
     set_param(params, "table_reader", table_reader)
 
@@ -416,7 +465,8 @@ def read_blob_table(table, part_index_column_name=None, data_column_name=None,
         process_response_action=lambda response: None,
         retriable_state_class=_ReadBlobTableRetriableState,
         client=client,
-        filename_hint=str(table))
+        filename_hint=str(table),
+    )
 
     return response
 
@@ -451,8 +501,9 @@ def _slice_row_ranges_for_parallel_read(ranges, row_count, data_size, data_size_
 
 
 def _prepare_params_for_parallel_read(params, range):
-    params["path"].attributes["ranges"] = [{"lower_limit": {"row_index": range[0]},
-                                            "upper_limit": {"row_index": range[1]}}]
+    params["path"].attributes["ranges"] = [
+        {"lower_limit": {"row_index": range[0]}, "upper_limit": {"row_index": range[1]}}
+    ]
     return params
 
 
@@ -529,14 +580,18 @@ class _ReadTableRetriableState(object):
                 else:
                     raise YtError(
                         "Read table with multiple ranges using retries is disabled, "
-                        "turn on read_retries/allow_multiple_ranges")
+                        "turn on read_retries/allow_multiple_ranges"
+                    )
 
                 if self.format.name() not in ["json", "yson", "skiff"]:
-                    raise YtError("Read table with multiple ranges using retries "
-                                  "is supported only in YSON, JSON and SKIFF formats")
+                    raise YtError(
+                        "Read table with multiple ranges using retries "
+                        "is supported only in YSON, JSON and SKIFF formats"
+                    )
                 if self.format.name() == "json" and self.format.attributes.get("format") == "pretty":
-                    raise YtError("Read table with multiple ranges using retries "
-                                  "is not supported for pretty JSON format")
+                    raise YtError(
+                        "Read table with multiple ranges using retries " "is not supported for pretty JSON format"
+                    )
 
             if self.range_started and self.params["path"].attributes["ranges"]:
                 fix_range(self.params["path"].attributes["ranges"][0])
@@ -701,7 +756,11 @@ class _ReadTableRetriableState(object):
         """
 
         def process_range_index():
-            if hasattr(row, "attributes") and "range_index" in row.attributes and "ranges" in self.params["path"].attributes:
+            if (
+                hasattr(row, "attributes")
+                and "range_index" in row.attributes
+                and "ranges" in self.params["path"].attributes
+            ):
                 self.range_started = False
                 ranges_to_skip = row.attributes["range_index"] - self.current_range_index
                 self.params["path"].attributes["ranges"] = self.params["path"].attributes["ranges"][ranges_to_skip:]
@@ -756,8 +815,17 @@ class _ReadTableRetriableState(object):
         return can_omit_control_info
 
 
-def read_table(table, format=None, table_reader=None, control_attributes=None, unordered=None,
-               raw=None, response_parameters=None, enable_read_parallel=None, client=None):
+def read_table(
+    table,
+    format=None,
+    table_reader=None,
+    control_attributes=None,
+    unordered=None,
+    raw=None,
+    response_parameters=None,
+    enable_read_parallel=None,
+    client=None,
+):
     """Reads rows from table and parse (optionally).
 
     :param table: table to read.
@@ -777,22 +845,28 @@ def read_table(table, format=None, table_reader=None, control_attributes=None, u
     table = TablePath(table, client=client)
     format = _prepare_command_format(format, raw, client)
     if get_config(client)["yamr_mode"]["treat_unexisting_as_empty"] and not exists(table, client=client):
-        return ResponseStreamWithReadRow(get_response=lambda: None,
-                                         iter_content=iter(EmptyResponseStream()),
-                                         close=lambda from_delete: None,
-                                         process_error=lambda response: None,
-                                         get_response_parameters=lambda: None)
+        return ResponseStreamWithReadRow(
+            get_response=lambda: None,
+            iter_content=iter(EmptyResponseStream()),
+            close=lambda from_delete: None,
+            process_error=lambda response: None,
+            get_response_parameters=lambda: None,
+        )
     attributes = get(
         table + "/@",
         attributes=["type", "chunk_count", "compressed_data_size", "dynamic", "row_count", "uncompressed_data_size"],
-        client=client)
+        client=client,
+    )
 
     if attributes.get("type") != "table":
         raise YtError("Command read is supported only for tables")
     if attributes["chunk_count"] > 100 and attributes["compressed_data_size"] // attributes["chunk_count"] < MB:
-        logger.info("Table chunks are too small; consider running the following command to improve read performance: "
-                    "yt merge --proxy {1} --src {0} --dst {0} --spec '{{combine_chunks=true;}}'"
-                    .format(table, get_config(client)["proxy"]["url"]))
+        logger.info(
+            "Table chunks are too small; consider running the following command to improve read performance: "
+            "yt merge --proxy {1} --src {0} --dst {0} --spec '{{combine_chunks=true;}}'".format(
+                table, get_config(client)["proxy"]["url"]
+            )
+        )
 
     params = {
         "path": table,
@@ -813,13 +887,14 @@ def read_table(table, format=None, table_reader=None, control_attributes=None, u
         else:
             if "ranges" not in table.attributes:
                 table.attributes["ranges"] = [
-                    {"lower_limit": {"row_index": 0},
-                     "upper_limit": {"row_index": attributes["row_count"]}}]
+                    {"lower_limit": {"row_index": 0}, "upper_limit": {"row_index": attributes["row_count"]}}
+                ]
             ranges = _slice_row_ranges_for_parallel_read(
                 table.attributes["ranges"],
                 attributes["row_count"],
                 attributes["uncompressed_data_size"],
-                get_config(client)["read_parallel"]["data_size_per_thread"])
+                get_config(client)["read_parallel"]["data_size_per_thread"],
+            )
             response_parameters = get_value(response_parameters, {})
             if not ranges:
                 response_parameters["start_row_index"] = 0
@@ -835,7 +910,8 @@ def read_table(table, format=None, table_reader=None, control_attributes=None, u
                 _prepare_params_for_parallel_read,
                 unordered,
                 response_parameters,
-                client)
+                client,
+            )
             if raw:
                 return response
             else:
@@ -863,7 +939,8 @@ def read_table(table, format=None, table_reader=None, control_attributes=None, u
         process_response_action=process_response,
         retriable_state_class=_ReadTableRetriableState if allow_retries else None,
         client=client,
-        filename_hint=str(table))
+        filename_hint=str(table),
+    )
 
     if raw:
         return response
@@ -871,17 +948,20 @@ def read_table(table, format=None, table_reader=None, control_attributes=None, u
         return format.load_rows(response)
 
 
-def read_table_structured(table, row_type, table_reader=None, unordered=None,
-                          response_parameters=None, enable_read_parallel=None, client=None):
+def read_table_structured(
+    table, row_type, table_reader=None, unordered=None, response_parameters=None, enable_read_parallel=None, client=None
+):
     """Reads rows from table in structured format. Cf. docstring for read_table"""
     schema = _try_get_schema(table, client=client)
     control_attributes = {
         "enable_row_index": True,
         "enable_range_index": True,
     }
-    py_schema = _SchemaRuntimeCtx() \
-        .set_validation_mode_from_config(config=get_config(client)) \
+    py_schema = (
+        _SchemaRuntimeCtx()
+        .set_validation_mode_from_config(config=get_config(client))
         .create_row_py_schema(row_type, schema, control_attributes=control_attributes)
+    )
     if not isinstance(table, TablePath):
         table = TablePath(table)
     columns = py_schema.get_columns_for_reading()
@@ -901,11 +981,12 @@ def read_table_structured(table, row_type, table_reader=None, unordered=None,
 
 
 def _are_valid_nodes(source_tables, destination_table):
-    return \
-        len(source_tables) == 1 and \
-        not source_tables[0].has_delimiters() and \
-        not destination_table.append and \
-        destination_table != source_tables[0]
+    return (
+        len(source_tables) == 1
+        and not source_tables[0].has_delimiters()
+        and not destination_table.append
+        and destination_table != source_tables[0]
+    )
 
 
 def copy_table(source_table, destination_table, replace=True, client=None):
@@ -923,26 +1004,27 @@ def copy_table(source_table, destination_table, replace=True, client=None):
     If `source_table` is a list of tables, tables would be merged.
     """
     from .run_operation_commands import run_merge
+
     if get_config(client)["yamr_mode"]["replace_tables_on_copy_and_move"]:
         replace = True
     source_tables = _prepare_source_tables(source_table, client=client)
     destination_table = TablePath(destination_table, client=client)
-    if get_config(client)["yamr_mode"]["treat_unexisting_as_empty"] and \
-            _are_default_empty_table(source_tables) and \
-            not destination_table.append:
+    if (
+        get_config(client)["yamr_mode"]["treat_unexisting_as_empty"]
+        and _are_default_empty_table(source_tables)
+        and not destination_table.append
+    ):
         remove(destination_table, client=client, force=True)
         return
     if _are_valid_nodes(source_tables, destination_table):
-        if replace and \
-                exists(destination_table, client=client) and \
-                source_tables[0] != destination_table:
+        if replace and exists(destination_table, client=client) and source_tables[0] != destination_table:
             # in copy destination should be missing
             remove(destination_table, client=client)
         copy(source_tables[0], destination_table, recursive=True, client=client)
     else:
-        is_sorted_merge = \
-            all(map(lambda t: is_sorted(t, client=client), source_tables)) \
-            and not destination_table.append
+        is_sorted_merge = (
+            all(map(lambda t: is_sorted(t, client=client), source_tables)) and not destination_table.append
+        )
         mode = "sorted" if is_sorted_merge else "ordered"
         run_merge(source_tables, destination_table, mode, client=client)
 
@@ -964,9 +1046,11 @@ def move_table(source_table, destination_table, replace=True, client=None):
         replace = True
     source_tables = _prepare_source_tables(source_table, client=client)
     destination_table = TablePath(destination_table, client=client)
-    if get_config(client)["yamr_mode"]["treat_unexisting_as_empty"] and \
-            _are_default_empty_table(source_tables) and \
-            not destination_table.append:
+    if (
+        get_config(client)["yamr_mode"]["treat_unexisting_as_empty"]
+        and _are_default_empty_table(source_tables)
+        and not destination_table.append
+    ):
         remove(destination_table, client=client, force=True)
         return
     if _are_valid_nodes(source_tables, destination_table):
@@ -1005,9 +1089,7 @@ def is_empty(table, client=None):
     :type table: str or :class:`TablePath <yt.wrapper.ypath.TablePath>`
     :rtype: bool
     """
-    return apply_function_to_result(
-        lambda res: res == 0,
-        row_count(TablePath(table, client=client), client=client))
+    return apply_function_to_result(lambda res: res == 0, row_count(TablePath(table, client=client), client=client))
 
 
 def get_sorted_by(table, default=None, client=None):
@@ -1033,15 +1115,10 @@ def is_sorted(table, client=None):
     if get_config(client)["yamr_mode"]["use_yamr_sort_reduce_columns"]:
         return get_sorted_by(table, [], client=client) == ["key", "subkey"]
     else:
-        return get_attribute(
-            TablePath(table, client=client),
-            "sorted",
-            default=False,
-            client=client)
+        return get_attribute(TablePath(table, client=client), "sorted", default=False, client=client)
 
 
-def alter_table(path, schema=None, schema_id=None, dynamic=None, upstream_replica_id=None,
-                replication_progress=None, client=None):
+def alter_table(path, schema=None, schema_id=None, dynamic=None, upstream_replica_id=None, replication_progress=None, client=None):
     """Performs schema and other table meta information modifications.
        Applicable to static and dynamic tables.
 
@@ -1098,7 +1175,7 @@ def partition_tables(paths, partition_mode=None, data_weight_per_partition=None,
     return partitions
 
 
-def dump_parquet(table, output_file, client=None):
+def dump_parquet(table: TTablePath, output_file: str, client: YtClient | None = None):
     """Dump table with a strict schema as `Parquet <https://parquet.apache.org/docs>` file
 
     :param table: table
@@ -1117,7 +1194,7 @@ def dump_parquet(table, output_file, client=None):
     yson.dump_parquet(output_file, stream)
 
 
-def upload_parquet(table, input_file, client=None):
+def upload_parquet(table: TTablePath, input_file: str, client: YtClient |None = None):
     """Upload `Parquet <https://parquet.apache.org/docs>` file as a table
 
     :param table: table
@@ -1132,7 +1209,4 @@ def upload_parquet(table, input_file, client=None):
             'can be installed ' + YSON_PACKAGE_INSTALLATION_TEXT)
 
     stream = yson.upload_parquet(input_file)
-    schema = stream.get_schema()
-    table = TablePath(table, client=client)
-    table.attributes["schema"] = TableSchema.from_yson_type(yson.loads(schema))
     write_table(table, stream, raw=True, format="arrow", client=client)

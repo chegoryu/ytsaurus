@@ -8,6 +8,7 @@ import yt.json_wrapper as json
 import yt.logger as logger
 import yt.yson as yson
 
+
 import os
 import sys
 import types
@@ -58,7 +59,7 @@ class Config(types.ModuleType, client_state.ClientState):
                 self.default_config_module.get_default_config())
 
         # Update params from env.
-        for key, value in os.environ.items():
+        for key, value in os.environ.items()
             prefix = "YT_"
             if not key.startswith(prefix):
                 continue
@@ -74,6 +75,7 @@ class Config(types.ModuleType, client_state.ClientState):
     def _init_from_cluster(self):
         if self.config["apply_remote_patch_at_start"] is not None:
             self.default_config_module.RemotePatchableValueBase.set_read_access_callback(self.config, self.default_config_module._get_settings_from_cluster_callback)
+
 
     # NB: Method required for compatibility
     def set_proxy(self, value):
@@ -165,7 +167,6 @@ class Config(types.ModuleType, client_state.ClientState):
             d = d[k]
         d[parts[-1]] = value
 
-
 # Process reload correctly
 special_module_name = "_yt_config_" + __name__
 if special_module_name not in sys.modules:
@@ -174,3 +175,17 @@ else:
     sys.modules[special_module_name]._reload(ignore_env=False)
 
 sys.modules[__name__] = sys.modules[special_module_name]
+
+def set_proxy(self, value): ...
+def get_backend_type(self, client): ...
+def __getitem__(key): ...
+def __setitem__(key, value): ...
+def update_config(patch): ...
+def get_config(client): ...
+def has_option(option, client): ...
+def get_option(option, client): ...
+def set_option(option, value, client): ...
+def get_command_param(param_name, client): ...
+def set_command_param(param_name, value, client): ...
+def del_command_param(param_name, client): ...
+def get_client_state(client): ...

@@ -1,19 +1,34 @@
 from .yson_types import (
-    YsonType, YsonString, YsonUnicode, YsonBoolean, YsonInt64, YsonUint64, YsonDouble,
-    YsonList, YsonMap, YsonEntity)
+    YsonType,
+    YsonString,
+    YsonUnicode,
+    YsonBoolean,
+    YsonInt64,
+    YsonUint64,
+    YsonDouble,
+    YsonList,
+    YsonMap,
+    YsonEntity,
+)
 from .common import YsonError
 
-try:
-    from yt.packages.six import text_type, binary_type, integer_types, iteritems, PY3
-    from yt.packages.six.moves import map as imap
-except ImportError:
-    from six import text_type, binary_type, integer_types, iteritems, PY3
-    from six.moves import map as imap
+from six import text_type, binary_type, integer_types, iteritems, PY3
+from six.moves import map as imap
 
 import copy
 
+from ..wrapper.typing_hack import (
+    Attributes,
+    ConvertibleToYson,
+)
 
-def to_yson_type(value, attributes=None, always_create_attributes=True, encoding="utf-8"):
+
+def to_yson_type(
+    value: ConvertibleToYson,
+    attributes: Attributes | None = None,
+    always_create_attributes: bool = True,
+    encoding: str = "utf-8",
+) -> YsonType:
     """Wraps value with YSON type."""
     if not always_create_attributes and attributes is None:
         if isinstance(value, text_type) and not PY3:
@@ -36,10 +51,11 @@ def to_yson_type(value, attributes=None, always_create_attributes=True, encoding
     elif value is False or value is True:
         result = YsonBoolean(value)
     elif isinstance(value, integer_types):
-        if value < -2 ** 63 or value >= 2 ** 64:
-            raise TypeError("Integer {0} cannot be represented in YSON "
-                            "since it is out of range [-2^63, 2^64 - 1])".format(value))
-        greater_than_max_int64 = value >= 2 ** 63
+        if value < -(2**63) or value >= 2**64:
+            raise TypeError(
+                "Integer {0} cannot be represented in YSON " "since it is out of range [-2^63, 2^64 - 1])".format(value)
+            )
+        greater_than_max_int64 = value >= 2**63
         if greater_than_max_int64 or isinstance(value, YsonUint64):
             result = YsonUint64(value)
         else:
@@ -62,8 +78,9 @@ def to_yson_type(value, attributes=None, always_create_attributes=True, encoding
 
 
 # TODO(ignat): Should we make auto-detection for use_byte_strings?
-def json_to_yson(json_tree, use_byte_strings=None):
+def json_to_yson(json_tree: ConvertibleToYson, use_byte_strings: bool | None = None) -> YsonType:
     """Converts json representation to YSON representation."""
+
     def to_literal(string):
         if use_byte_strings:
             return string.encode("ascii")
@@ -98,7 +115,7 @@ def json_to_yson(json_tree, use_byte_strings=None):
     elif value is False or value is True:
         result = YsonBoolean(value)
     elif isinstance(value, integer_types):
-        greater_than_max_int64 = value >= 2 ** 63
+        greater_than_max_int64 = value >= 2**63
         if greater_than_max_int64:
             result = YsonUint64(value)
         else:
@@ -108,7 +125,9 @@ def json_to_yson(json_tree, use_byte_strings=None):
     elif isinstance(value, list):
         result = YsonList(imap(lambda item: json_to_yson(item, use_byte_strings=use_byte_strings), value))
     elif isinstance(value, dict):
-        result = YsonMap((decode_key(k), json_to_yson(v, use_byte_strings=use_byte_strings)) for k, v in iteritems(YsonMap(value)))
+        result = YsonMap(
+            (decode_key(k), json_to_yson(v, use_byte_strings=use_byte_strings)) for k, v in iteritems(YsonMap(value))
+        )
     elif value is None:
         result = YsonEntity()
     else:
@@ -119,7 +138,7 @@ def json_to_yson(json_tree, use_byte_strings=None):
     return result
 
 
-def yson_to_json(yson_tree, print_attributes=True):
+def yson_to_json(yson_tree: YsonType, print_attributes: bool = True) -> ConvertibleToYson:
     def encode_key(key):
         if PY3 and isinstance(key, binary_type):
             key = key.decode("ascii")
@@ -131,8 +150,10 @@ def yson_to_json(yson_tree, print_attributes=True):
         return dict((encode_key(k), yson_to_json(v)) for k, v in iteritems(d))
 
     if hasattr(yson_tree, "attributes") and yson_tree.attributes and print_attributes:
-        return {"$attributes": process_dict(yson_tree.attributes),
-                "$value": yson_to_json(yson_tree, print_attributes=False)}
+        return {
+            "$attributes": process_dict(yson_tree.attributes),
+            "$value": yson_to_json(yson_tree, print_attributes=False),
+        }
     if isinstance(yson_tree, list):
         return list(imap(yson_to_json, yson_tree))
     elif isinstance(yson_tree, dict):

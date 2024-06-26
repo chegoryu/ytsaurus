@@ -14,16 +14,10 @@ import datetime
 import yt.type_info as ti
 import yt.logger as logger
 
-try:
-    import dataclasses
-except ImportError:
-    pass
+import dataclasses
 
 if is_schema_module_available():
-    try:
-        from yt.packages.typing_extensions import get_type_hints
-    except ImportError:
-        from typing_extensions import get_type_hints
+    from typing_extensions import get_type_hints
 
 
 class _PySchemaSerializer:

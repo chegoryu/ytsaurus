@@ -27,27 +27,14 @@ Exiting.
         sys.exit(1)
 
 
-# DO NOT EDIT SPECIAL "# __IF_OS:" MARKERS
 
-try:
-    pass
-    # __IF_NOT_OS:
-    from .client_impl_yandex import YtClient
-except ImportError:
-    pass
-    # __IF_NOT_OS:
-    from .client_impl import YtClient
+from .client_impl import YtClient
 
-# __IF_OS:
-# from .client_impl import YtClient
+for name in client_api.all_names:
+    if not are_signatures_equal(getattr(YtClient, name), create_class_method(getattr(client_api, name))):
+        report_and_exit("Difference in signature for {}".format(name))
 
 
-try:
-    for name in client_api.all_names:
-        if not are_signatures_equal(getattr(YtClient, name), create_class_method(getattr(client_api, name))):
-            report_and_exit("Difference in signature for {}".format(name))
-except AttributeError as e:
-    report_and_exit(str(e))
 
 
 def create_client_with_command_params(client=None, **kwargs):
@@ -59,3 +46,4 @@ def create_client_with_command_params(client=None, **kwargs):
 
 # Backward compatibility.
 Yt = YtClient
+__all__ = ["YtClient", "Yt", "report_and_exit", "create_client_with_command_params"]

@@ -3,10 +3,7 @@ from .rich import RichYPath
 from yt.yson import YsonString, YsonUnicode, convert
 from yt.common import update
 
-try:
-    from yt.packages.six import text_type, binary_type
-except ImportError:
-    from six import text_type, binary_type
+from six import text_type, binary_type
 
 from copy import deepcopy
 

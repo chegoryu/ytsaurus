@@ -2,6 +2,7 @@ from argparse import ArgumentParser, SUPPRESS
 
 from yt.wrapper.cli_helpers import (SUBPARSER_KWARGS, add_subparser, add_argument)
 import yt.wrapper.strawberry as strawberry
+import yt.wrapper as yt
 import yt.yson as yson
 
 import os
@@ -10,20 +11,17 @@ import os
 def _strawberry_ctl_handler(family):
     def handler(**kwargs):
         address = kwargs.pop("address")
-        stage = kwargs.pop("stage")
-        cluster_name = kwargs.pop("cluster_name")
         command_name = kwargs.pop("command_name")
         parser = kwargs.pop("parser")
         proxy_choices = kwargs.pop("proxy_choices")
+        cluster_proxy = yt.config["proxy"]["url"]
         params = kwargs
 
-        cluster_name = strawberry.get_cluster_name(cluster_name)
-
-        if cluster_name not in proxy_choices:
-            address = strawberry.get_full_ctl_address(address, family, stage)
-            msg = "bad cluster choice: {}\n".format(cluster_name)
+        if cluster_proxy not in proxy_choices:
+            address = strawberry.get_full_ctl_address(address, family)
+            msg = "bad cluster proxy choice: {}\n".format(cluster_proxy)
             msg += "controller {} serves only following clusters: {}\n".format(address, proxy_choices)
-            msg += "set up proper cluster name via --cluster-name option or via strawberry_cluster_name option in the remote client config"
+            msg += "set up proper cluster proxy via --proxy option or via YT_PROXY env variable"
             parser.error(msg)
 
         try:
@@ -32,8 +30,7 @@ def _strawberry_ctl_handler(family):
                     params=params,
                     address=address,
                     family=family,
-                    stage=stage,
-                    cluster_name=cluster_name,
+                    cluster_proxy=cluster_proxy,
                     unparsed=True):
 
                 if "to_print" in response:
@@ -55,9 +52,7 @@ def add_strawberry_ctl_parser(add_parser, family):
     family_upper = family.upper()
 
     address_parser = ArgumentParser(add_help=False)
-    address_parser.add_argument("--address", help="controller service address; may contain {stage}, {family} and {host_suffix} parameters; the default value is fetched from the remote client config")
-    address_parser.add_argument("--stage", help="controller stage", default="production")
-    address_parser.add_argument("--cluster-name", help="cluster name under which the cluster is configured in the strawberry controller; the default value is fetched from the remote client config")
+    address_parser.add_argument("--address", help="controller service address")
     # "help" option should not be handled before we fetch and register all available commands.
     # We will add it manually later.
     parser = add_parser("ctl", add_help=False, pythonic_help="{} controller".format(family_upper),
@@ -67,9 +62,9 @@ def add_strawberry_ctl_parser(add_parser, family):
     subparsers = parser.add_subparsers(metavar="command", **SUBPARSER_KWARGS)
     add_cmd_subparser = add_subparser(subparsers, params_argument=False)
 
-    def register_commands(address, stage):
+    def register_commands(address):
         try:
-            api_structure = strawberry.describe_api(address, family, stage)
+            api_structure = strawberry.describe_api(address, family)
         except Exception as e:
             msg = "failed to fetch available commands from controller service\n"
             msg += str(e)
@@ -155,8 +150,8 @@ def add_strawberry_ctl_parser(add_parser, family):
     do_parse_known_args = parser.parse_known_args
 
     def parse_known_args(args=None, namespace=None):
-        namespace, unparsed = address_parser.parse_known_args(args=args, namespace=namespace)
-        register_commands(namespace.address, namespace.stage)
+        parsed_address, unparsed = address_parser.parse_known_args(args=args, namespace=namespace)
+        register_commands(parsed_address.address)
         return do_parse_known_args(args=unparsed, namespace=namespace)
 
     parser.parse_known_args = parse_known_args

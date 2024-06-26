@@ -1,5 +1,4 @@
 from .common import get_user_agent, YtError
-from .constants import DEFAULT_HOST_SUFFIX
 from .http_driver import TokenAuth
 from .http_helpers import get_token, format_logging_params
 
@@ -12,35 +11,21 @@ import os
 import time
 
 
-def get_full_ctl_address(address, family, stage):
+def get_full_ctl_address(address, family):
     family_upper = family.upper()
-
     if not address:
         address = os.getenv("{}_CTL_ADDRESS".format(family_upper))
     if not address:
-        address = os.getenv("STRAWBERRY_CTL_ADDRESS")
-    if not address:
-        address = yt.config["strawberry_ctl_address"]
-
-    address = address.format(stage=stage, family=family, host_suffix=DEFAULT_HOST_SUFFIX)
-
+        return "http://production.{}-ctl.yt.yandex-team.ru".format(family)
+    if address.isalnum():
+        return "http://{}.{}-ctl.yt.yandex-team.ru".format(address, family)
     if not address.startswith("http://") and not address.startswith("https://"):
-        address = "http://" + address
-
+        return "http://" + address
     return address
 
 
-def get_cluster_name(cluster_name):
-    if not cluster_name:
-        cluster_name = yt.config["strawberry_cluster_name"]
-    if not cluster_name:
-        cluster_name = yt.config["proxy"]["url"]
-
-    return cluster_name
-
-
-def describe_api(address, family, stage):
-    address = get_full_ctl_address(address, family, stage)
+def describe_api(address, family):
+    address = get_full_ctl_address(address, family)
 
     url = address + "/describe"
     headers = {
@@ -69,10 +54,10 @@ def describe_api(address, family, stage):
     return yson.loads(response.content)
 
 
-def make_request(command_name, params, address, family, stage, cluster_name, unparsed=False):
-    address = get_full_ctl_address(address, family, stage)
+def make_request(command_name, params, address, family, cluster_proxy, unparsed=False):
+    address = get_full_ctl_address(address, family)
 
-    url = "{}/{}/{}".format(address, cluster_name, command_name)
+    url = "{}/{}/{}".format(address, cluster_proxy, command_name)
     data = yson.dumps({"params": params, "unparsed": unparsed})
     auth = TokenAuth(get_token())
     headers = {
@@ -111,15 +96,14 @@ def make_request(command_name, params, address, family, stage, cluster_name, unp
     return yson.loads(response.content)
 
 
-def make_request_generator(command_name, params, address, family, stage, cluster_name, unparsed=False):
+def make_request_generator(command_name, params, address, family, cluster_proxy, unparsed=False):
     while True:
         response = make_request(
             command_name=command_name,
             params=params,
             address=address,
             family=family,
-            stage=stage,
-            cluster_name=cluster_name,
+            cluster_proxy=cluster_proxy,
             unparsed=unparsed)
 
         yield response
@@ -132,6 +116,10 @@ def make_request_generator(command_name, params, address, family, stage, cluster
 
         else:
             break
+
+
+def _get_cluster_proxy(cluster_proxy):
+    return cluster_proxy if cluster_proxy else yt.config["proxy"]["url"]
 
 
 def _get_result_or_raise(response, family):
@@ -154,11 +142,10 @@ def _get_result_or_raise(response, family):
 
 
 class StrawberryClient(object):
-    def __init__(self, address=None, cluster_name=None, family=None, stage="production"):
+    def __init__(self, address=None, cluster_proxy=None, family=None):
         self.address = address
-        self.cluster_name = get_cluster_name(cluster_name)
+        self.cluster_proxy = _get_cluster_proxy(cluster_proxy)
         self.family = family
-        self.stage = stage
 
     def make_controller_request(self, command_name, params):
         for response in make_request_generator(
@@ -166,8 +153,7 @@ class StrawberryClient(object):
                 params=params,
                 address=self.address,
                 family=self.family,
-                stage=self.stage,
-                cluster_name=self.cluster_name):
+                cluster_proxy=self.cluster_proxy):
             result = _get_result_or_raise(response, self.family)
         return result
 

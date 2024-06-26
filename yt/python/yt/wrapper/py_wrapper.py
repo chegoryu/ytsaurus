@@ -13,10 +13,7 @@ from ._py_runner import get_platform_version, main as run_py_runner
 import yt.logger as logger
 import yt.subprocess_wrapper as subprocess
 
-try:
-    from importlib import import_module
-except ImportError:
-    from yt.packages.importlib import import_module
+from importlib import import_module
 
 import re
 import copy
@@ -935,7 +932,6 @@ def respawn_in_docker(
     The wrapped function will be executed inside the Docker container in order to provide
     the most similar execution environment as on the YTSaurus cluster.
     All operation invocations like yt.run_map automatically assume the specified docker image.
-
     Args:
         :param str image: docker image (same format as in the operation's spec)
         :param Optional[str] target_platform: target platform for the docker container
@@ -949,7 +945,6 @@ def respawn_in_docker(
     Example:
         from yt import wrapper
         from .lib import mapper
-
         @respawn_in_docker("python3.10")
         def main():
             client = wrapper.YtClient()
@@ -958,7 +953,6 @@ def respawn_in_docker(
                 source_table="//tmp/foo",
                 destination_table="//tmp/bar",
             )
-
         if __name__ == "__main__":
             main()
     """

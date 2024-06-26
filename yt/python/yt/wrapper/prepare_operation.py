@@ -1,9 +1,15 @@
+from yt.wrapper.client_impl import YtClient
 from .batch_helpers import create_batch_client
 from .cypress_commands import get
 from .errors import YtError, YtResolveError, YtResponseError
 from .format import StructuredSkiffFormat
-from .schema import (TableSchema, _SchemaRuntimeCtx, _validate_py_schema, is_yt_dataclass,
-                     check_schema_module_available, is_schema_module_available)
+from .schema import (
+    TableSchema,
+    _SchemaRuntimeCtx,
+    _validate_py_schema,
+    is_yt_dataclass,
+    check_schema_module_available,
+)
 from .schema.internal_schema import RowSchema  # noqa
 from .ypath import TablePath
 from .config import get_config
@@ -13,10 +19,19 @@ from yt.yson import to_yson_type
 from abc import ABCMeta, abstractmethod
 from copy import deepcopy
 
-if is_schema_module_available():
-    from .schema import Variant, OutputRow, RowIterator
+from typing import (
+    Any,
+    Iterable,
+)
+from .typing_hack import (
+    _YtDataclassProtocol,
+    TTablePath,
+    YTablePath,
+)
 
-    import typing
+from .schema import Variant, OutputRow, RowIterator
+
+import typing
 
 
 class TypedJob:
@@ -25,7 +40,7 @@ class TypedJob:
     The types for input and output rows are specified in :func:`~TypedJob.prepare_operation`.
     """
 
-    def prepare_operation(self, context, preparer):
+    def prepare_operation(self, context: "OperationPreparationContext", preparer: "OperationPreparer"):
         """
         Override this method to specify input and output row types
         (they must be classes marked with :func:`yt_dataclass` as decorator).
@@ -43,13 +58,15 @@ class TypedJob:
         try:
             _infer_table_schemas(self, context, preparer)
         except (TypeError, YtError) as e:
-            raise YtError("Failed to infer table schemas. "
-                          "Specify it manually by overriding `job.prepare_operation` method",
-                          attributes={"job_python_type": type(self).__qualname__}, inner_errors=e)
+            raise YtError(
+                "Failed to infer table schemas. " "Specify it manually by overriding `job.prepare_operation` method",
+                attributes={"job_python_type": type(self).__qualname__},
+                inner_errors=e,
+            )
 
         return
 
-    def get_intermediate_stream_count(self):
+    def get_intermediate_stream_count(self) -> int | None:
         """
         Override this method in mapper jobs of MapReduce operation to specify
         the number of intermediate streams.
@@ -67,42 +84,42 @@ class OperationPreparationContext:
     __metaclass__ = ABCMeta
 
     @abstractmethod
-    def get_input_count(self):
+    def get_input_count(self) -> int:
         """
         Get number of input streams.
         """
         pass
 
     @abstractmethod
-    def get_output_count(self):
+    def get_output_count(self) -> int:
         """
         Get number of output streams.
         """
         pass
 
     @abstractmethod
-    def get_input_schemas(self):
+    def get_input_schemas(self) -> list[TableSchema | None]:
         """
         Get list of input schemas.
         """
         pass
 
     @abstractmethod
-    def get_output_schemas(self):
+    def get_output_schemas(self) -> list[TableSchema | None]:
         """
         Get list of output schemas. Some schemas may be None if a table does not exist.
         """
         pass
 
     @abstractmethod
-    def get_input_paths(self):
+    def get_input_paths(self) -> list[YTablePath | None]:
         """
         Get list of input table paths.
         """
         pass
 
     @abstractmethod
-    def get_output_paths(self):
+    def get_output_paths(self) -> list[YTablePath | None]:
         """
         Get list of output table paths.
         """
@@ -115,7 +132,7 @@ class OperationPreparer:
     Input column filter, input column renaming and output schemas also can be specified.
     """
 
-    def input(self, index, type=None, **kwargs):
+    def input(self, index: int, type: _YtDataclassProtocol | None = None, **kwargs: Any):
         """
         Single-index version of :func:`~OperationPreparer.inputs`.
         """
@@ -125,7 +142,13 @@ class OperationPreparer:
         kwargs["type"] = type
         return self.inputs([index], **kwargs)
 
-    def inputs(self, indices, type=None, column_filter=None, column_renaming=None):
+    def inputs(
+        self,
+        indices: Iterable[int],
+        type: _YtDataclassProtocol | None = None,
+        column_filter: list[str] | None = None,
+        column_renaming: dict[str, str] | None = None,
+    ):
         """
         Specify row type, column filter and renaming for several input streams.
 
@@ -146,7 +169,7 @@ class OperationPreparer:
             self._set_elements("Input column renaming", self._input_column_renamings, index_list, column_renaming)
         return self
 
-    def output(self, index, type=None, **kwargs):
+    def output(self, index: int, type: _YtDataclassProtocol | None = None, **kwargs: Any):
         """
         Single-index version of :func:`~OperationPreparer.outputs`.
         """
@@ -156,7 +179,13 @@ class OperationPreparer:
         kwargs["type"] = type
         return self.outputs([index], **kwargs)
 
-    def outputs(self, indices, type=None, schema=None, infer_strict_schema=True):
+    def outputs(
+        self,
+        indices: Iterable[int],
+        type: _YtDataclassProtocol | None = None,
+        schema: TableSchema | None = None,
+        infer_strict_schema: bool = True,
+    ):
         """
         Specify row type and schema for several output streams.
 
@@ -176,7 +205,7 @@ class OperationPreparer:
             self._set_elements("Output schema", self._output_schemas, index_list, schema)
         return self
 
-    def __init__(self, context, input_control_attributes=None):
+    def __init__(self, context: OperationPreparationContext, input_control_attributes: dict[str, Any] | None = None):
         self._context = context  # type: IntermediateOperationPreparationContext
         self._input_count = self._context.get_input_count()
         self._output_count = self._context.get_output_count()
@@ -195,13 +224,13 @@ class OperationPreparer:
         self._input_control_attributes = input_control_attributes
 
     @staticmethod
-    def _set_elements(name, list_, indices, value):
+    def _set_elements(name: str, list_: list[Any], indices: Iterable[int], value: Any):
         for index in indices:
             if index < 0 or index >= len(list_):
                 raise ValueError("{} index {} out of range [0, {})".format(name, index, len(list_)))
             list_[index] = value
 
-    def _raise_missing(self, direction, index):
+    def _raise_missing(self, direction: str, index: int):
         assert direction in ("input", "output")
         if direction == "input":
             path = self._context.get_input_paths()[index]
@@ -220,10 +249,17 @@ class OperationPreparer:
             if type_ is None:
                 self._raise_missing("input", index)
             column_renaming = self._input_column_renamings[index]
-            py_schema = _SchemaRuntimeCtx() \
-                .set_validation_mode_from_config(get_config(client=self._context.get_client())) \
-                .set_for_reading_only(True) \
-                .create_row_py_schema(type_, input_schemas[index], control_attributes=self._input_control_attributes, column_renaming=column_renaming)
+            py_schema = (
+                _SchemaRuntimeCtx()
+                .set_validation_mode_from_config(get_config(client=self._context.get_client()))
+                .set_for_reading_only(True)
+                .create_row_py_schema(
+                    type_,
+                    input_schemas[index],
+                    control_attributes=self._input_control_attributes,
+                    column_renaming=column_renaming,
+                )
+            )
             self._input_py_schemas.append(py_schema)
             _validate_py_schema(py_schema)
         for index, type_ in enumerate(self._output_types):
@@ -231,10 +267,12 @@ class OperationPreparer:
                 self._raise_missing("output", index)
             if self._output_schemas[index] is None:
                 self._output_schemas[index] = output_schemas[index]
-            py_schema = _SchemaRuntimeCtx() \
-                .set_validation_mode_from_config(get_config(client=self._context.get_client())) \
-                .set_for_reading_only(False) \
+            py_schema = (
+                _SchemaRuntimeCtx()
+                .set_validation_mode_from_config(get_config(client=self._context.get_client()))
+                .set_for_reading_only(False)
                 .create_row_py_schema(type_, self._output_schemas[index])
+            )
             _validate_py_schema(py_schema)
             self._output_py_schemas.append(py_schema)
             if self._output_schemas[index] is None or self._output_schemas[index].is_empty_nonstrict():
@@ -244,7 +282,7 @@ class OperationPreparer:
                 )
 
 
-def _request_schemas(paths, client):
+def _request_schemas(paths: list[TTablePath | None], client: YtClient) -> list[TableSchema | None]:
     batch_client = create_batch_client(raise_errors=False, client=client)
     batch_responses = []
     for path in paths:
@@ -263,76 +301,77 @@ def _request_schemas(paths, client):
         if isinstance(error, YtResolveError):
             return None
         raise error
+
     return list(map(get_schema, batch_responses))
 
 
 class SimpleOperationPreparationContext(OperationPreparationContext):
-    def __init__(self, input_paths, output_paths, client):
+    def __init__(self, input_paths: list[YTablePath], output_paths: list[YTablePath], client: YtClient):
         self._input_paths = input_paths
         self._output_paths = output_paths
         self._client = client
         self._input_schemas = None
         self._output_schemas = None
 
-    def get_input_count(self):
+    def get_input_count(self) -> int:
         return len(self._input_paths)
 
-    def get_output_count(self):
+    def get_output_count(self) -> int:
         return len(self._output_paths)
 
-    def get_input_schemas(self):
+    def get_input_schemas(self) -> list[TableSchema | None]:
         if self._input_schemas is None:
             self._input_schemas = _request_schemas(self._input_paths, self._client)
         return self._input_schemas
 
-    def get_output_schemas(self):
+    def get_output_schemas(self) -> list[TableSchema | None]:
         if self._output_schemas is None:
             self._output_schemas = _request_schemas(self._output_paths, self._client)
         return self._output_schemas
 
-    def get_input_paths(self):
+    def get_input_paths(self) -> list[YTablePath | None]:
         return self._input_paths
 
-    def get_output_paths(self):
+    def get_output_paths(self) -> list[YTablePath | None]:
         return self._output_paths
 
-    def get_client(self):
+    def get_client(self) -> YtClient:
         return self._client
 
 
 class IntermediateOperationPreparationContext(OperationPreparationContext):
-    def __init__(self, input_schemas, output_paths, client):
+    def __init__(self, input_schemas: list[TableSchema | None], output_paths: list[YTablePath], client: YtClient):
         self._input_schemas = input_schemas
         self._input_paths = [None] * len(self._input_schemas)
         self._output_paths = output_paths
         self._client = client
         self._output_schemas = None
 
-    def get_input_count(self):
+    def get_input_count(self) -> int:
         return len(self._input_schemas)
 
-    def get_output_count(self):
+    def get_output_count(self) -> int:
         return len(self._output_paths)
 
-    def get_input_schemas(self):
+    def get_input_schemas(self) -> list[TableSchema | None]:
         return self._input_schemas
 
-    def get_output_schemas(self):
+    def get_output_schemas(self) -> list[TableSchema | None]:
         if self._output_schemas is None:
             self._output_schemas = _request_schemas(self._output_paths, self._client)
         return self._output_schemas
 
-    def get_input_paths(self):
+    def get_input_paths(self) -> list[YTablePath | None]:
         return self._input_paths
 
-    def get_output_paths(self):
+    def get_output_paths(self) -> list[YTablePath | None]:
         return self._output_paths
 
-    def get_client(self):
+    def get_client(self) -> YtClient:
         return self._client
 
 
-def run_operation_preparation(job, context, input_control_attributes):
+def run_operation_preparation(job: TypedJob, context: OperationPreparationContext, input_control_attributes: dict[str, Any]):
     assert isinstance(job, TypedJob)
     preparer = OperationPreparer(context, input_control_attributes=input_control_attributes)
     job.prepare_operation(context, preparer)
@@ -370,7 +409,7 @@ def run_operation_preparation(job, context, input_control_attributes):
     return input_format, output_format, input_paths, output_paths
 
 
-def _infer_table_schemas(job, context, preparer):
+def _infer_table_schemas(job: TypedJob, context: OperationPreparationContext, preparer: OperationPreparer):
     """
     Try to infer table schemas from :func:`job.__call__`'s type hints.
     The number of input and output types must match the number of input and output tables respectively.
@@ -413,8 +452,9 @@ def _infer_table_schemas(job, context, preparer):
             if len(type_list) == 1:
                 type_list *= expected_type_count
             else:
-                raise TypeError("Wrong number of {} types {}, {} expected".format(
-                    table_type, len(type_list), expected_type_count))
+                raise TypeError(
+                    "Wrong number of {} types {}, {} expected".format(table_type, len(type_list), expected_type_count)
+                )
 
         return type_list
 

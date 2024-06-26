@@ -1,10 +1,7 @@
 from .constants import YSON_PACKAGE_INSTALLATION_TEXT
 from .errors import YtError
 
-try:
-    from yt.skiff import SkiffRecord, SkiffSchema, SkiffTableSwitch, SkiffOtherColumns # noqa
-except ImportError:
-    pass
+from yt.skiff import SkiffRecord, SkiffSchema, SkiffTableSwitch, SkiffOtherColumns # noqa
 
 import yt.skiff
 

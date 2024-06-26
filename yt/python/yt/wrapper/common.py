@@ -7,10 +7,7 @@ import yt.json_wrapper as json
 from collections.abc import Iterable
 import typing  # noqa
 
-try:
-    from yt.packages.decorator import decorator
-except ImportError:
-    from decorator import decorator
+from decorator import decorator
 
 import argparse
 import collections
@@ -25,23 +22,16 @@ import sys
 import types
 
 try:
-    import yt.packages.distro as distro
+    import distro
 except ImportError:
+    distro = None
     try:
-        import distro
+        from platform import linux_distribution
     except ImportError:
-        distro = None
-        try:
-            from platform import linux_distribution
-        except ImportError:
-            linux_distribution = None
+        linux_distribution = None
 
 from multiprocessing.pool import ThreadPool
-# Python3 compatibility
-try:
-    from collections.abc import Mapping
-except ImportError:
-    from collections import Mapping
+from collections.abc import Mapping
 from itertools import chain, starmap
 from functools import reduce
 from copy import copy, deepcopy

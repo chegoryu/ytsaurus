@@ -1,12 +1,9 @@
-try:
-    from yt.packages.argcomplete import autocomplete  # noqa
-except ImportError:
-    from argcomplete import autocomplete  # noqa
+from argcomplete import autocomplete  # noqa
 
 import yt.wrapper as yt
 
 if not yt.config["argcomplete_verbose"]:
-    warn = lambda *args, **kwargs: None  # noqa
+    warn = lambda *args, **kwargs: None
 
 
 def complete_map_node(path):

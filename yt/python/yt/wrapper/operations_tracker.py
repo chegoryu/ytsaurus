@@ -1,14 +1,16 @@
+from typing import Any, Type, cast as typing_cast, overload
 from .config import get_config, get_backend_type
 from .common import get_value
 from .errors import YtError, YtResponseError
 from .exceptions_catcher import ExceptionCatcher
-from .operation_commands import (Operation, OperationState, get_operation_attributes)
+from .operation_commands import Operation, OperationState, get_operation_attributes
 from .spec_builders import SpecBuilder
 from .run_operation_commands import run_operation
 from .batch_helpers import batch_apply
 from .transaction import Transaction, get_current_transaction_id
 
 import yt.logger as logger
+from .client_impl import YtClient
 
 from collections import namedtuple
 from time import sleep
@@ -22,13 +24,12 @@ import sys
 SpecTask = namedtuple("SpecTask", ["spec_builder", "client", "enable_optimizations", "transaction_id"])
 
 
-def copy_client(client):
-    from .client import YtClient
+def copy_client(client: YtClient | None):
     return YtClient(config=deepcopy(get_config(client)))
 
 
 class _OperationsTrackingThread(Thread):
-    def __init__(self, poll_period, print_progress, batch_size):
+    def __init__(self, poll_period: int, print_progress: bool, batch_size: int):
         super(_OperationsTrackingThread, self).__init__()
         self._poll_period = poll_period
         self._print_progress = print_progress
@@ -46,7 +47,7 @@ class _OperationsTrackingThread(Thread):
         self.should_abort_all = False
         self.batch_size = batch_size
 
-    def add(self, operation):
+    def add(self, operation: Operation):
         with self._thread_lock:
             self._operations_to_track.append(operation)
 
@@ -64,8 +65,9 @@ class _OperationsTrackingThread(Thread):
             # last added operation can be removed from cypress faster than
             # tracker checks it.
             with self._thread_lock:
-                coef = 1.0 / \
-                    max(1, len(self._operations_to_track) + (2 * self.processing_operations_count / self.batch_size))
+                coef = 1.0 / max(
+                    1, len(self._operations_to_track) + (2 * self.processing_operations_count / self.batch_size)
+                )
             sleep(coef * self._poll_period / 1000.0)
 
     def _check_operations(self):
@@ -107,7 +109,7 @@ class _OperationsTrackingThread(Thread):
                 data = [op.id for op in cluster_to_operations[proxy]]
                 logger.debug("Fetching states of operations in %s", proxy)
 
-                def get_state(operation, client=client):
+                def get_state(operation: str, client: YtClient | None = client):
                     return get_operation_attributes(operation, fields=["state"], client=client)
 
                 try:
@@ -117,8 +119,8 @@ class _OperationsTrackingThread(Thread):
                     cluster_to_states[proxy] = [None for op in cluster_to_operations[proxy]]
                 else:
                     cluster_to_states[proxy] = [
-                        OperationState(operation_state["state"])
-                        for operation_state in op_states_raw]
+                        OperationState(operation_state["state"]) for operation_state in op_states_raw
+                    ]
 
         with self._thread_lock:
             for proxy in cluster_to_operations:
@@ -151,12 +153,14 @@ class _OperationsTrackingThread(Thread):
 
 class OperationsTrackerBase(object):
     """Base Operations Tracker class.
-       It has controls for working with some Operations.
+    It has controls for working with some Operations.
     """
 
     THREAD_CLASS = _OperationsTrackingThread
 
-    def __init__(self, poll_period=5000, abort_on_sigint=True, print_progress=True, batch_size=100):
+    def __init__(
+        self, poll_period: int = 5000, abort_on_sigint: bool = True, print_progress: bool = True, batch_size: int = 100
+    ):
         self.operations = {}
 
         self._poll_period = poll_period
@@ -167,13 +171,13 @@ class OperationsTrackerBase(object):
 
         self._stopped = False
 
-    def _add_operation(self, operation):
+    def _add_operation(self, operation: Operation):
         if operation.id in self.operations:
             raise YtError("Operation {0} is already tracked".format(operation.id))
         self.operations[operation.id] = operation
         self._tracking_thread.add(operation)
 
-    def add(self, operation):
+    def add(self, operation: Operation):
         """Adds Operation object to tracker.
 
         :param Operation operation: operation to track.
@@ -185,15 +189,19 @@ class OperationsTrackerBase(object):
             return
 
         if not isinstance(operation, Operation):
-            raise YtError("Valid Operation object should be passed "
-                          "to add method, not {0!r}".format(operation))
+            raise YtError("Valid Operation object should be passed " "to add method, not {0!r}".format(operation))
 
         if not operation.exists():
             raise YtError("Operation {0} does not exist".format(operation.id))
 
         self._add_operation(operation)
 
-    def wait_all(self, check_result=True, abort_exceptions=(KeyboardInterrupt,), keep_finished=False):
+    def wait_all(
+        self,
+        check_result: bool = True,
+        abort_exceptions: tuple[Type[BaseException], ...] = (KeyboardInterrupt,),
+        keep_finished: bool = False,
+    ):
         """Waits all added operations and prints progress.
 
         :param bool check_result: if `True` then :class:`YtError <yt.common.YtError>` will be raised if \
@@ -230,8 +238,10 @@ class OperationsTrackerBase(object):
             self.operations.clear()
 
         if check_result and inner_errors:
-            raise YtError("All tracked operations finished but {0} operations finished unsuccessfully"
-                          .format(len(inner_errors)), inner_errors=inner_errors)
+            raise YtError(
+                "All tracked operations finished but {0} operations finished unsuccessfully".format(len(inner_errors)),
+                inner_errors=inner_errors,
+            )
 
     def abort_all(self):
         """Aborts all added operations."""
@@ -246,13 +256,13 @@ class OperationsTrackerBase(object):
     def __enter__(self):
         return self
 
-    def __exit__(self, exc_type, exc_value, exc_tb):
+    def __exit__(self, exc_type: Any, exc_value: Any, exc_tb: Any):
         if exc_type is None:
             self.wait_all()
         else:
             logger.warning(
-                "Operations wait failed with error %s, aborting all operations in tracker...",
-                repr(exc_value))
+                "Operations wait failed with error %s, aborting all operations in tracker...", repr(exc_value)
+            )
             self.abort_all()
         self._tracking_thread.stop()
         self._stopped = True
@@ -262,14 +272,15 @@ class OperationsTrackerBase(object):
             return
         logger.warning(
             "OperationsTracker is supposed to be used as context manager, "
-            "see https://ytsaurus.tech/docs/en/api/python/userdoc#operations_tracker_class")
+            "see https://ytsaurus.tech/docs/en/api/python/userdoc#operations_tracker_class"
+        )
         self._tracking_thread.stop()
 
 
 class OperationsTracker(OperationsTrackerBase):
     """Holds operations and allows to wait or abort all tracked operations."""
 
-    def add_by_id(self, operation_id, client=None):
+    def add_by_id(self, operation_id: str, client: YtClient | None = None):
         """Adds operation to tracker (by operation id)
 
         :param str operation_id: operation id.
@@ -287,17 +298,18 @@ class OperationsTracker(OperationsTrackerBase):
 
 
 class _OperationsTrackingPoolThread(_OperationsTrackingThread):
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args: Any, **kwargs: Any):
         super(_OperationsTrackingPoolThread, self).__init__(*args, **kwargs)
 
         self._pool_size = None
         self._queue = deque()
         self.should_clear_queue = False
 
-    def set_pool_size(self, pool_size):
+    def set_pool_size(self, pool_size: int):
         self._pool_size = pool_size
 
-    def add(self, spec_builder, enable_optimizations=None, client=None):
+    @overload
+    def add(self, spec_builder: SpecBuilder, enable_optimizations: bool | None = None, client: YtClient | None = None):
         """
         :param SpecBuilder spec_builder: spec_builder to run operation and track it.
         """
@@ -336,7 +348,8 @@ class _OperationsTrackingPoolThread(_OperationsTrackingThread):
                     spec_task.spec_builder,
                     sync=False,
                     enable_optimizations=spec_task.enable_optimizations,
-                    client=spec_task.client)
+                    client=spec_task.client,
+                )
             operations.append(operation)
 
         with self._thread_lock:
@@ -355,11 +368,13 @@ class _OperationsTrackingPoolThread(_OperationsTrackingThread):
 
 
 class OperationsTrackerPool(OperationsTrackerBase):
-    """Pool for operations that are started automatically. """
+    """Pool for operations that are started automatically."""
 
     THREAD_CLASS = _OperationsTrackingPoolThread
 
-    def __init__(self, pool_size, enable_optimizations=True, client=None, **kwargs):
+    def __init__(
+        self, pool_size: int, enable_optimizations: bool = True, client: YtClient | None = None, **kwargs: Any
+    ):
         """Create an OperationsTrackerPool.
 
         :param int pool_size: maximum number of concurrently running operation
@@ -369,15 +384,17 @@ class OperationsTrackerPool(OperationsTrackerBase):
         This parameter may be tuned by the tracker itself. The more operations -- the less `poll_period` is.
         """
         super(OperationsTrackerPool, self).__init__(**kwargs)
-        self._tracking_thread.set_pool_size(pool_size)
+        typing_cast(_OperationsTrackingPoolThread, self._tracking_thread).set_pool_size(pool_size)
+        # self._tracking_thread = typing_cast(_OperationsTrackingPoolThread, self._tracking_thread)
+        # self._tracking_thread.set_pool_size(pool_size)
 
         self.enable_optimizations = enable_optimizations
         self.client = client
 
-    def _is_spec_builder(self, spec_builder):
+    def _is_spec_builder(self, spec_builder: SpecBuilder):
         return isinstance(spec_builder, SpecBuilder)
 
-    def add(self, spec_builder, enable_optimizations=None, client=None):
+    def add(self, spec_builder: SpecBuilder, enable_optimizations: bool | None = None, client: YtClient | None = None):
         """Adds Operation object to tracker.
 
         :param SpecBuilder spec_builder: spec_builder to run operation and track it.
@@ -391,7 +408,9 @@ class OperationsTrackerPool(OperationsTrackerBase):
 
         self._tracking_thread.add(spec_builder, enable_optimizations, client)
 
-    def map(self, spec_builders, enable_optimizations=None, client=None):
+    def map(
+        self, spec_builders: list[SpecBuilder], enable_optimizations: bool | None = None, client: YtClient | None = None
+    ):
         """Adds Operation object to tracker.
 
         :param spec_builders: spec_builders to run operations and track them.

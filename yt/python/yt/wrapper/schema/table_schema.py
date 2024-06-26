@@ -1,27 +1,43 @@
+from typing import (
+    Literal,
+    Any,
+    overload,
+)
+
+from yt.yson.yson_types import YsonType
 from .helpers import check_schema_module_available, is_schema_module_available
 from .types import is_yt_dataclass
 from .internal_schema import _py_schema_to_ti_type, _create_py_schema
 
 from ..errors import YtError
 
+from ..typing_hack import (
+    TSortOrder,
+    _YtDataclassProtocol,
+)
+
 import yt.yson
 
-try:
-    from yt.packages.six.moves import builtins
-except ImportError:
-    from six.moves import builtins
+from six.moves import builtins
 
 import copy
 import collections
 
 import yt.type_info as ti
+import yt.type_info.type_base as ti_base
 
 
 class SortColumn(object):
-    ASCENDING = "ascending"
-    DESCENDING = "descending"
+    ASCENDING: TSortOrder = "ascending"
+    DESCENDING: TSortOrder = "descending"
 
-    def __init__(self, name, sort_order=ASCENDING):
+    @property
+    def name(self) -> str: ...
+
+    @property
+    def sort_order(self) -> TSortOrder: ...
+
+    def __init__(self, name: str, sort_order: TSortOrder = ASCENDING):
         self.name = name
         self.sort_order = sort_order
 
@@ -33,12 +49,30 @@ class SortColumn(object):
 
 
 class ColumnSchema(object):
-    """ Class representing table column schema.
+    """Class representing table column schema.
 
     See https://ytsaurus.tech/docs/en/user-guide/storage/static-schema
     """
 
-    def __init__(self, name, type, sort_order=None, group=None):
+    @property
+    def name(self) -> str: ...
+
+    @property
+    def type(self) -> ti_base.Type: ...
+
+    @property
+    def sort_order(self) -> TSortOrder | None: ...
+
+    @property
+    def group(self) -> str | None: ...
+
+    def __init__(
+        self,
+        name: str,
+        type: ti_base.Type | _YtDataclassProtocol,
+        sort_order: TSortOrder | None = None,
+        group: str | None = None,
+    ):
         """type may be either a type_info type or a @yt.wrapper.schema.dataclass"""
 
         type_ = type
@@ -51,13 +85,15 @@ class ColumnSchema(object):
         elif is_schema_module_available() and is_yt_dataclass(type_):
             self.type = _py_schema_to_ti_type(_create_py_schema(type_))
         else:
-            raise TypeError("Expected type_info type or class marked with @yt.wrapper.schema.yt_dataclass, "
-                            "got <{}>{!r}".format(type(type_), type_))
+            raise TypeError(
+                "Expected type_info type or class marked with @yt.wrapper.schema.yt_dataclass, "
+                "got <{}>{!r}".format(type(type_), type_)
+            )
 
         self.sort_order = sort_order
         self.group = group
 
-    def to_yson_type(self):
+    def to_yson_type(self) -> dict[str, Any]:
         result = {
             "name": self.name,
             "type_v3": yt.yson.loads(ti.serialize_yson(self.type)),
@@ -69,7 +105,7 @@ class ColumnSchema(object):
         return result
 
     @classmethod
-    def from_yson_type(cls, obj):
+    def from_yson_type(cls, obj: YsonType):
         if "type_v3" in obj:
             type = ti.deserialize_yson(yt.yson.dumps(obj["type_v3"]))
         else:
@@ -78,22 +114,26 @@ class ColumnSchema(object):
 
         return ColumnSchema(obj["name"], type, sort_order=obj.get("sort_order"), group=obj.get("group"))
 
-    def __eq__(self, other):
+    def __eq__(self, other: "ColumnSchema") -> bool:
         if not isinstance(other, ColumnSchema):
             return False
-        return (self.name, self.type, self.sort_order, self.group) == \
-            (other.name, other.type, other.sort_order, other.group)
+        return (self.name, self.type, self.sort_order, self.group) == (
+            other.name,
+            other.type,
+            other.sort_order,
+            other.group,
+        )
 
-    def __ne__(self, other):
+    def __ne__(self, other: "ColumnSchema") -> bool:
         return not (self == other)
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return "ColumnSchema({})".format(self.to_yson_type())
 
-    def __getstate__(self):
+    def __getstate__(self) -> dict[str, Any]:
         return self.to_yson_type()
 
-    def __setstate__(self, d):
+    def __setstate__(self, d: YsonType):
         self.__dict__ = ColumnSchema.from_yson_type(d).__dict__
 
 
@@ -109,7 +149,21 @@ class TableSchema(object):
     See https://ytsaurus.tech/docs/en/user-guide/storage/static-schema
     """
 
-    def __init__(self, columns=None, strict=None, unique_keys=None):
+    @property
+    def columns(self) -> list[ColumnSchema]: ...
+
+    @property
+    def strict(self) -> bool: ...
+
+    @property
+    def unique_keys(self) -> bool: ...
+
+    def __init__(
+        self,
+        columns: list[ColumnSchema] | None = None,
+        strict: bool | None = None,
+        unique_keys: bool | None = None,
+    ):
         if columns is None:
             self.columns = []
         else:
@@ -117,14 +171,19 @@ class TableSchema(object):
 
         if strict is None:
             strict = True
-        self.strict = strict
+        self.strict: bool = strict
 
         if unique_keys is None:
             unique_keys = False
-        self.unique_keys = unique_keys
+        self.unique_keys: bool = unique_keys
 
     @classmethod
-    def from_row_type(cls, row_type, strict=None, unique_keys=False):
+    def from_row_type(
+        cls,
+        row_type: _YtDataclassProtocol,
+        strict: bool | None = None,
+        unique_keys: bool = False,
+    ) -> "TableSchema":
         """Infer schema from yt_dataclass.
 
         :param strict:
@@ -136,22 +195,38 @@ class TableSchema(object):
 
         check_schema_module_available()
         if not is_yt_dataclass(row_type):
-            raise TypeError("Expected class marked with @yt.wrapper.schema.yt_dataclass, got {}"
-                            .format(row_type.__qualname__))
+            raise TypeError(
+                "Expected class marked with @yt.wrapper.schema.yt_dataclass, got {}".format(row_type.__qualname__)
+            )
         py_schema = _create_py_schema(row_type)
-        has_other_columns = (py_schema._other_columns_field is not None)
+        has_other_columns = py_schema._other_columns_field is not None
         if strict is None:
             strict = not has_other_columns
         if strict and has_other_columns:
-            raise YtError('Cannot infer strict schema from yt_dataclass "{}" with field marked with "OtherColumns"'
-                          .format(row_type.__qualname__))
+            raise YtError(
+                'Cannot infer strict schema from yt_dataclass "{}" with field marked with "OtherColumns"'.format(
+                    row_type.__qualname__
+                )
+            )
         columns = [
-            ColumnSchema(column._yt_name, _py_schema_to_ti_type(column._py_schema))
-            for column in py_schema._fields
+            ColumnSchema(column._yt_name, _py_schema_to_ti_type(column._py_schema)) for column in py_schema._fields
         ]
         return cls(columns, strict=strict, unique_keys=unique_keys)
 
-    def add_column(self, *args, **kwargs):
+    @overload
+    def add_column(self, column: "ColumnSchema") -> Self: ...
+
+    @overload
+    def add_column(
+        self,
+        name: str,
+        type: ti_base.Type | _YtDataclassProtocol,
+        sort_order: TSortOrder | None = None,
+        group: str | None = None,
+    ) -> Self: ...
+
+    @overload
+    def add_column(self, *args, **kwargs) -> Self:
         """Add column.
 
         Call as either .add_column(ColumnSchema(...)) or .add_column(name, type, ...).
@@ -164,16 +239,13 @@ class TableSchema(object):
             self.columns.append(ColumnSchema(*args, **kwargs))
         return self
 
-    def build_schema_sorted_by(self, sort_columns):
+    def build_schema_sorted_by(self, sort_columns: str | SortColumn | list[str] | list[SortColumn]) -> "TableSchema":
         if isinstance(sort_columns, str) or isinstance(sort_columns, SortColumn):
             sort_columns = [sort_columns]
 
         sort_columns = self._to_sort_columns(sort_columns)
 
-        column_name_to_column = collections.OrderedDict(
-            (column.name, copy.deepcopy(column))
-            for column in self.columns
-        )
+        column_name_to_column = collections.OrderedDict((column.name, copy.deepcopy(column)) for column in self.columns)
         new_columns = []
         for sort_column in sort_columns:
             column = column_name_to_column.get(sort_column.name)
@@ -186,11 +258,7 @@ class TableSchema(object):
             column.sort_order = None
             new_columns.append(column)
 
-        old_key_columns = set(
-            column.name
-            for column in self.columns
-            if column.sort_order is not None
-        )
+        old_key_columns = set(column.name for column in self.columns if column.sort_order is not None)
         new_key_columns = set(sort_column.name for sort_column in sort_columns)
         new_unique_keys = self.unique_keys and old_key_columns.issubset(new_key_columns)
 
@@ -200,14 +268,14 @@ class TableSchema(object):
             unique_keys=new_unique_keys,
         )
 
-    def to_yson_type(self):
+    def to_yson_type(self) -> YsonType:
         columns = yt.yson.to_yson_type([c.to_yson_type() for c in self.columns])
         columns.attributes["strict"] = self.strict
         columns.attributes["unique_keys"] = self.unique_keys
         return columns
 
     @classmethod
-    def from_yson_type(cls, obj):
+    def from_yson_type(cls, obj: YsonType) -> "TableSchema":
         columns = [ColumnSchema.from_yson_type(c) for c in obj]
         attrs = obj.attributes
         kwargs = {}
@@ -217,23 +285,22 @@ class TableSchema(object):
             kwargs["unique_keys"] = attrs["unique_keys"]
         return cls(columns, **kwargs)
 
-    def is_empty_nonstrict(self):
+    def is_empty_nonstrict(self) -> bool:
         return not self.strict and len(self.columns) == 0
 
-    def __eq__(self, other):
+    def __eq__(self, other: "TableSchema") -> bool:
         if not isinstance(other, TableSchema):
             return False
-        return (self.columns, self.strict, self.unique_keys) == \
-            (other.columns, other.strict, other.unique_keys)
+        return (self.columns, self.strict, self.unique_keys) == (other.columns, other.strict, other.unique_keys)
 
-    def __ne__(self, other):
+    def __ne__(self, other: "TableSchema") -> bool:
         return not (self == other)
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return "TableSchema({})".format(self.to_yson_type())
 
     @staticmethod
-    def _to_sort_columns(sort_columns):
+    def _to_sort_columns(sort_columns: list[str | SortColumn]) -> list[SortColumn]:
         actual_sort_columns = []
         for sort_column in sort_columns:
             if isinstance(sort_column, SortColumn):
@@ -241,8 +308,5 @@ class TableSchema(object):
             elif isinstance(sort_column, str):
                 actual_sort_columns.append(SortColumn(sort_column))
             else:
-                raise TypeError(
-                    "Expected sort_columns to be iterable "
-                    "over strings or SortColumn instances"
-                )
+                raise TypeError("Expected sort_columns to be iterable " "over strings or SortColumn instances")
         return actual_sort_columns

@@ -1,6 +1,6 @@
 from .batch_helpers import batch_apply
 from .config import get_config
-from .common import MB, typing  # noqa
+from .common import MB, typing
 from .cypress_commands import mkdir, concatenate, find_free_subpath, remove
 from .default_config import DEFAULT_WRITE_CHUNK_SIZE
 from .driver import make_request
@@ -77,7 +77,7 @@ class ParallelWriter(object):
 
         client = YtClient(config=client_config)
 
-        write_action = lambda chunk, params: self._write_action(chunk, params, client)  # noqa
+        write_action = lambda chunk, params: self._write_action(chunk, params, client)
         retrier = WriteRequestRetrier(transaction_timeout=self._transaction_timeout,
                                       write_action=write_action,
                                       client=client)
@@ -161,7 +161,6 @@ def make_parallel_write_request(command_name, stream, path, params, unordered,
                                 create_object, remote_temp_directory, size_hint=None,
                                 filename_hint=None, progress_monitor=None, client=None):
     # type: (str, RawStream | ItemStream, str | YPath, dict, bool, typing.Callable[[YPath, yt.YtClient], None], str, int | None, str | None, _ProgressReporter | None, yt.YtClient | None) -> None
-
     assert isinstance(stream, (RawStream, ItemStream))
 
     if stream.isatty():
@@ -195,7 +194,7 @@ def make_parallel_write_request(command_name, stream, path, params, unordered,
         # without a risk of triggering timeout.
         stream = stream.split_chunks(2 * MB)
 
-        write_action = lambda chunk, params, client: make_request(  # noqa
+        write_action = lambda chunk, params, client: make_request(
             command_name,
             params,
             data=iter(chunk),

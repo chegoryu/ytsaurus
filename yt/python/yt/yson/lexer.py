@@ -25,12 +25,8 @@ from .common import (
     STRING_MARKER, INT64_MARKER, DOUBLE_MARKER,
     FALSE_MARKER, TRUE_MARKER, UINT64_MARKER)
 
-try:
-    from yt.packages.six.moves import xrange
-    from yt.packages.six import int2byte, iterbytes
-except ImportError:
-    from six.moves import xrange
-    from six import int2byte, iterbytes
+from six.moves import xrange
+from six import int2byte, iterbytes
 
 import struct
 

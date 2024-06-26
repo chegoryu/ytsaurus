@@ -16,15 +16,13 @@ from yt.wrapper.yson import dumps, to_yson_type
 
 import yt.logger as logger
 
-try:
-    from yt.packages.six.moves import xrange
-except ImportError:
-    from six.moves import xrange
+from six.moves import xrange
 
 from copy import deepcopy
 from tempfile import NamedTemporaryFile
 
 import os
+import json
 import random
 
 
@@ -37,7 +35,7 @@ def _resolve_alias(operation_alias, client=None):
             include_scheduler=True,
             attributes=["id", "state"],
             client=client)
-    except:  # noqa
+    except:
         # TODO(max42): introduce error code.
         return None
 
@@ -55,6 +53,7 @@ def _build_description(cypress_ytserver_clickhouse_path=None,
                        prev_operation_id=None,
                        enable_monitoring=None,
                        client=None):
+
     description = {}
     if cypress_ytserver_clickhouse_path is not None:
         description = update(description, {"ytserver-clickhouse": get(cypress_ytserver_clickhouse_path + "/@user_attributes", client=client)})
@@ -76,8 +75,8 @@ def _build_description(cypress_ytserver_clickhouse_path=None,
     # TODO(max42): YT-11115.
     if cluster is not None and operation_alias is not None:
         description["yql_url"] = _format_url(
-            "https://yql.yandex-team.ru/?query=use%20chyt.{}/{}%3B%0A%0Aselect%201%3B&query_type=CLICKHOUSE".format(
-                cluster, operation_alias[1:]))
+            "https://yql.yandex-team.ru/?query=use%20chyt.{}/{}%3B%0A%0Aselect%201%3B&query_type=CLICKHOUSE"
+                .format(cluster, operation_alias[1:]))
 
     # Put link to monitoring.
     if cluster is not None and operation_alias is not None and enable_monitoring:
@@ -85,11 +84,11 @@ def _build_description(cypress_ytserver_clickhouse_path=None,
         solomon_service = "clickhouse"
 
         description["solomon_root_url"] = _format_url(
-            "https://solomon.yandex-team.ru/?project=yt&cluster={}&service={}&operation_alias={}".format(
-                cluster, solomon_service, operation_alias[1:]))
+            "https://solomon.yandex-team.ru/?project=yt&cluster={}&service={}&operation_alias={}"
+                .format(cluster, solomon_service, operation_alias[1:]))
         description["solomon_dashboard_url"] = _format_url(
-            "https://solomon.yandex-team.ru/?project=yt&cluster={}&service={}&cookie=Aggr&dashboard={}&l.operation_alias={}".format(
-                cluster, solomon_service, solomon_dashboard, operation_alias[1:]))
+            "https://solomon.yandex-team.ru/?project=yt&cluster={}&service={}&cookie=Aggr&dashboard={}&l.operation_alias={}"
+                .format(cluster, solomon_service, solomon_dashboard, operation_alias[1:]))
 
     return description
 

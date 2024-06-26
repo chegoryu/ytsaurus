@@ -20,10 +20,7 @@ from .yson_token import (
     TOKEN_END_OF_STREAM,
 )
 
-try:
-    from yt.packages.six import PY3, BytesIO, text_type
-except ImportError:
-    from six import PY3, BytesIO, text_type
+from six import PY3, BytesIO, text_type
 
 
 def _is_text_reader(stream):

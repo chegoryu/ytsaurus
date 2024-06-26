@@ -81,8 +81,7 @@ def run_erase(table, spec=None, sync=True, client=None):
 @forbidden_inside_job
 def run_merge(source_table, destination_table, mode=None,
               sync=True, job_io=None, table_writer=None,
-              job_count=None, spec=None, merge_by=None,
-              client=None):
+              job_count=None, spec=None, merge_by=None, client=None):
     """Merges source tables to destination table.
 
     :param source_table: tables to merge.
@@ -99,6 +98,7 @@ def run_merge(source_table, destination_table, mode=None,
     :param dict spec: standard operation parameter.
     :param merge_by: list of columns for merging by (works only for `sorted` mode)
     :type merge_by: list[str]
+
 
     .. seealso::  :ref:`operation_parameters`.
     """
@@ -573,8 +573,9 @@ def _run_reduce_optimizer(spec, client=None):
 
                 sort_operation_list = _run_sort_optimizer(sort_spec, client)
 
+                finalize = lambda state: remove(temp_table, client=client)
                 spec["input_table_paths"] = [TablePath(temp_table, client=client)]
-                operations_list = sort_operation_list + [("reduce", spec, [lambda state: remove(temp_table, client=client)])]
+                operations_list = sort_operation_list + [("reduce", spec, [finalize])]
             else:
                 if "partition_count" not in spec and "job_count" in spec:
                     spec["partition_count"] = spec["job_count"]
@@ -635,7 +636,7 @@ def run_operation(spec_builder, sync=True, run_operation_mutation_id=None, enabl
                                              client=client)
 
         return result
-    except:  # noqa
+    except:
         for _, _, finalization_actions in operations_iterator:
             for finalize_function in finalization_actions:
                 finalize_function(None)

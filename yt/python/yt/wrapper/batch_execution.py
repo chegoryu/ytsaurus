@@ -36,7 +36,7 @@ class BatchRequestRetrier(Retrier):
 
     def action(self):
         for tasks, responses in zip(chunk_iter_list(self._tasks, self._max_batch_size),
-                                    chunk_iter_list(self._responses, self._max_batch_size)):
+                                     chunk_iter_list(self._responses, self._max_batch_size)):
             results = execute_batch(tasks, concurrency=self._concurrency, client=self._client)
             if get_api_version(self._client) == "v4":
                 results = results["results"]

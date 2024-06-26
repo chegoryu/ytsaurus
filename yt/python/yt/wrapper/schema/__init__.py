@@ -73,3 +73,42 @@ def _create_row_py_schema(
                 yt_fields.append((name, column.type))
     struct_schema = internal_schema._create_struct_schema(py_type, yt_fields, allow_other_columns=True, schema_runtime_context=schema_runtime_context)
     return internal_schema.RowSchema(struct_schema, control_attributes=control_attributes, schema_runtime_context=schema_runtime_context)
+
+
+__all__ = [
+    "Context",
+    "Date",
+    "Datetime",
+    "FormattedPyDatetime",
+    "Int16",
+    "Int32",
+    "Int64",
+    "Int8",
+    "Float",
+    "Double",
+    "Interval",
+    "OtherColumns",
+    "OutputRow",
+    "create_yt_enum",
+    "RowIterator",
+    "Timestamp",
+    "Uint16",
+    "Uint32",
+    "Uint64",
+    "Uint8",
+    "YsonBytes",
+    "create_annotated_type",
+    "is_yt_dataclass",
+    "yt_dataclass",
+    "ColumnSchema",
+    "SortColumn",
+    "TableSchema",
+    "_row_py_schema_to_skiff_schema",
+    "_validate_py_schema",
+    "internal_schema",
+    "check_schema_module_available",
+    "is_schema_module_available",
+    "YtError",
+    "Variant",
+    "_SchemaRuntimeCtx",
+]

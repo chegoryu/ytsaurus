@@ -1,13 +1,6 @@
-try:
-    from yt.packages.six import iteritems, text_type
-except ImportError:
-    from six import iteritems, text_type
+from six import iteritems, text_type
 
-try:
-    from simplejson import load, dump, loads, dumps, JSONDecodeError  # noqa
-except ImportError:
-    # This version of simplejson has no compiled speedup module.
-    from yt.packages.simplejson import load, dump, loads, dumps, JSONDecodeError  # noqa
+from simplejson import load, dump, loads, dumps, JSONDecodeError  # noqa
 
 
 def loads_as_bytes(*args, **kwargs):

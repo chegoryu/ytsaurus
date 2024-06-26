@@ -1,4 +1,7 @@
+from typing import Any, Iterable
+from yt.yson.yson_types import YsonMap
 from .common import ThreadPoolHelper, set_param, datetime_to_string, date_string_to_datetime, deprecated, utcnow
+from .client_impl import YtClient
 from .config import get_config
 from .errors import YtOperationFailedError, YtResponseError, YtRetriableArchiveError
 from .constants import LOCAL_MODE_URL_PATTERN
@@ -8,15 +11,15 @@ from .exceptions_catcher import ExceptionCatcher
 from .job_commands import list_jobs, get_job_stderr
 from .local_mode import is_local_mode, get_local_mode_proxy_address
 from .retries import Retrier
+from .typing_hack import (
+    TFormat,
+)
 from . import yson
 
 import yt.logger as logger
 from yt.common import format_error, to_native_str, flatten, join_exceptions
 
-try:
-    from yt.packages.decorator import decorator
-except ImportError:
-    from decorator import decorator
+from decorator import decorator
 
 import builtins
 import logging
@@ -24,20 +27,16 @@ from datetime import datetime, timedelta
 from time import sleep, time
 from multiprocessing import TimeoutError
 
-try:
-    from cStringIO import StringIO
-except ImportError:  # Python 3
-    from io import StringIO
+from io import StringIO
 
 OPERATIONS_PATH = "//sys/operations"
 
 
 class OperationInfoRetrier(Retrier):
-    def __init__(self, retry_config, command, params, format, timeout, client=None):
+    def __init__(self, retry_config, command, params, format, timeout: int, client: YtClient | None = None):
         super(OperationInfoRetrier, self).__init__(
-            retry_config=retry_config,
-            timeout=timeout,
-            exceptions=get_retriable_errors() + (YtRetriableArchiveError,))
+            retry_config=retry_config, timeout=timeout, exceptions=get_retriable_errors() + (YtRetriableArchiveError,)
+        )
 
         self.command = command
         self.params = params
@@ -47,20 +46,17 @@ class OperationInfoRetrier(Retrier):
 
     def action(self):
         return make_formatted_request(
-            self.command,
-            self.params,
-            format=self.format,
-            timeout=self.timeout,
-            client=self.client)
+            self.command, self.params, format=self.format, timeout=self.timeout, client=self.client
+        )
 
-    def except_action(self, error, attempt):
-        logger.warning('Request %s failed with error %s',
-                       self.command, repr(error))
+    def except_action(self, error, attempt: int):
+        logger.warning('Request %s failed with error %s', self.command, repr(error))
+
 
 # Public functions
 
 
-def abort_operation(operation, reason=None, client=None):
+def abort_operation(operation: str, reason: str | None = None, client: YtClient | None = None):
     """Aborts operation.
 
     Do nothing if operation is in final state.
@@ -75,7 +71,7 @@ def abort_operation(operation, reason=None, client=None):
     make_request(command_name, params, client=client)
 
 
-def suspend_operation(operation, abort_running_jobs=False, client=None):
+def suspend_operation(operation: str, abort_running_jobs: bool = False, client: YtClient | None = None):
     """Suspends operation.
 
     :param str operation: operation id.
@@ -85,7 +81,7 @@ def suspend_operation(operation, abort_running_jobs=False, client=None):
     return make_request(command_name, params, client=client)
 
 
-def resume_operation(operation, client=None):
+def resume_operation(operation: str, client: YtClient | None = None):
     """Continues operation after suspending.
 
     :param str operation: operation id.
@@ -94,7 +90,7 @@ def resume_operation(operation, client=None):
     return make_request(command_name, {"operation_id": operation}, client=client)
 
 
-def complete_operation(operation, client=None):
+def complete_operation(operation: str, client: YtClient | None = None):
     """Completes operation.
 
     Aborts all running and pending jobs.
@@ -109,9 +105,15 @@ def complete_operation(operation, client=None):
     return make_request(command_name, {"operation_id": operation}, client=client)
 
 
-def get_operation(operation_id=None, operation_alias=None, attributes=None, include_scheduler=None, format=None, client=None):
-    """Get operation attributes through API.
-    """
+def get_operation(
+    operation_id: str | None = None,
+    operation_alias: str | None = None,
+    attributes: list[str] | None = None,
+    include_scheduler: bool | None = None,
+    format: TFormat = None,
+    client: YtClient | None = None,
+):
+    """Get operation attributes through API."""
     params = {}
     set_param(params, "operation_id", operation_id)
     set_param(params, "operation_alias", operation_alias)
@@ -126,16 +128,32 @@ def get_operation(operation_id=None, operation_alias=None, attributes=None, incl
         params,
         format=format,
         client=client,
-        timeout=timeout).run()
+        timeout=timeout,
+    ).run()
 
 
-def list_operations(user=None, state=None, type=None, filter=None, pool_tree=None, pool=None, with_failed_jobs=None,
-                    from_time=None, to_time=None, cursor_time=None, cursor_direction=None,
-                    include_archive=None, include_counters=None, limit=None, enable_ui_mode=False,
-                    attributes=None,
-                    format=None, client=None):
-    """List operations that satisfy given options.
-    """
+def list_operations(
+    user=None,
+    state=None,
+    type=None,
+    filter=None,
+    pool_tree=None,
+    pool=None,
+    with_failed_jobs=None,
+    from_time=None,
+    to_time=None,
+    cursor_time=None,
+    cursor_direction=None,
+    include_archive=None,
+    include_counters=None,
+    limit=None,
+    enable_ui_mode=False,
+    attributes=None,
+    format=None,
+    client=None,
+):
+    """List operations that satisfy given options."""
+
     def format_time(time):
         if isinstance(time, datetime):
             return datetime_to_string(time)
@@ -161,19 +179,27 @@ def list_operations(user=None, state=None, type=None, filter=None, pool_tree=Non
 
     timeout = get_config(client)["operation_info_commands_timeout"]
 
-    return make_formatted_request(
-        "list_operations",
-        params=params,
-        format=format,
-        client=client,
-        timeout=timeout)
+    return make_formatted_request("list_operations", params=params, format=format, client=client, timeout=timeout)
 
 
-def iterate_operations(user=None, state=None, type=None, filter=None, pool_tree=None, pool=None, with_failed_jobs=None,
-                       from_time=None, to_time=None, cursor_direction="past", limit_per_request=100,
-                       include_archive=None, attributes=None, format=None, client=None):
-    """Yield operations that satisfy given options.
-    """
+def iterate_operations(
+    user=None,
+    state=None,
+    type=None,
+    filter=None,
+    pool_tree=None,
+    pool=None,
+    with_failed_jobs=None,
+    from_time=None,
+    to_time=None,
+    cursor_direction="past",
+    limit_per_request=100,
+    include_archive=None,
+    attributes=None,
+    format=None,
+    client=None,
+):
+    """Yield operations that satisfy given options."""
     cursor_time = None
     # First iteration with no cursor_time filter.
     if cursor_direction == "future":
@@ -184,13 +210,25 @@ def iterate_operations(user=None, state=None, type=None, filter=None, pool_tree=
         step = 1
 
     while True:
-        operations_response = list_operations(user=user, state=state, type=type, filter=filter, pool_tree=pool_tree, pool=pool,
-                                              with_failed_jobs=with_failed_jobs, from_time=from_time, to_time=to_time,
-                                              cursor_time=cursor_time, cursor_direction=cursor_direction,
-                                              limit=limit_per_request, include_archive=include_archive,
-                                              include_counters=False,
-                                              attributes=attributes,
-                                              format=format, client=client)
+        operations_response = list_operations(
+            user=user,
+            state=state,
+            type=type,
+            filter=filter,
+            pool_tree=pool_tree,
+            pool=pool,
+            with_failed_jobs=with_failed_jobs,
+            from_time=from_time,
+            to_time=to_time,
+            cursor_time=cursor_time,
+            cursor_direction=cursor_direction,
+            limit=limit_per_request,
+            include_archive=include_archive,
+            include_counters=False,
+            attributes=attributes,
+            format=format,
+            client=client,
+        )
         operations_response = operations_response["operations"]
         if not operations_response:
             break
@@ -198,8 +236,9 @@ def iterate_operations(user=None, state=None, type=None, filter=None, pool_tree=
             # list_operations fetches (start_time; finish_time] from archive.
             cursor_time = operation["start_time"]
             yield operation
-        if (cursor_direction == "future" and cursor_time == to_time) or \
-                (cursor_direction == "past" and cursor_time == from_time):
+        if (cursor_direction == "future" and cursor_time == to_time) or (
+            cursor_direction == "past" and cursor_time == from_time
+        ):
             break
         cursor_time = datetime_to_string(date_string_to_datetime(cursor_time) - timedelta(microseconds=step))
 
@@ -207,35 +246,34 @@ def iterate_operations(user=None, state=None, type=None, filter=None, pool_tree=
 def update_operation_parameters(operation_id, parameters, client=None):
     """Updates operation runtime parameters."""
     command_name = "update_operation_parameters" if get_api_version(client) == "v4" else "update_op_parameters"
-    return make_request(
-        command_name,
-        {"operation_id": operation_id, "parameters": parameters},
-        client=client)
+    return make_request(command_name, {"operation_id": operation_id, "parameters": parameters}, client=client)
+
 
 # Helpers
 
 
 class OperationState(object):
     """State of operation (simple wrapper for string name)."""
-    def __init__(self, name):
+
+    def __init__(self, name: str):
         self.name = name
 
-    def is_finished(self):
+    def is_finished(self) -> bool:
         return self.name in ("aborted", "completed", "failed")
 
-    def is_unsuccessfully_finished(self):
+    def is_unsuccessfully_finished(self) -> bool:
         return self.name in ("aborted", "failed")
 
-    def is_running(self):
+    def is_running(self) -> bool:
         return self.name == "running"
 
-    def is_starting(self):
+    def is_starting(self) -> bool:
         return self.name in ("starting", "orphaned", "waiting_for_agent", "initializing", "reviving", "reviving_jobs")
 
-    def __eq__(self, other):
+    def __eq__(self, other: "OperationState" | str):
         return self.name == str(other)
 
-    def __ne__(self, other):
+    def __ne__(self, other: "OperationState" | str):
         return not (self == other)
 
     def __repr__(self):
@@ -247,7 +285,8 @@ class OperationState(object):
 
 class TimeWatcher(object):
     """Class for proper sleeping in waiting operation."""
-    def __init__(self, min_interval, max_interval, slowdown_coef):
+
+    def __init__(self, min_interval: int | float, max_interval: int | float, slowdown_coef: int | float):
         """
         Initialize time watcher.
 
@@ -260,7 +299,7 @@ class TimeWatcher(object):
         self.slowdown_coef = slowdown_coef
         self._total_time = 0.0
 
-    def _bound(self, interval):
+    def _bound(self, interval: int | float):
         return min(max(interval, self.min_interval), self.max_interval)
 
     def reset(self):
@@ -283,7 +322,7 @@ def get_operation_attributes(operation, fields=None, client=None):
     return get_operation(operation, attributes=fields, client=client)
 
 
-def get_operation_state(operation, client=None):
+def get_operation_state(operation: str, client: YtClient | None = None) -> OperationState:
     """Returns current state of operation.
 
     :param str operation: operation id.
@@ -302,7 +341,7 @@ def get_operation_state(operation, client=None):
 def get_operation_progress(operation, with_build_time=False, client=None):
     def calculate_total(counter):
         if isinstance(counter, dict):
-            return sum(map(calculate_total, counter.values()))
+            return sum(map(calculate_total, itervalues(counter)))
         return counter
 
     build_time = None
@@ -361,7 +400,8 @@ def order_progress(progress):
 
 class PrintOperationInfo(object):
     """Caches operation state and prints info by update."""
-    def __init__(self, operation, client=None):
+
+    def __init__(self, operation: str, client: YtClient | None = None):
         self.operation = operation
         self.state = None
         self.progress = None
@@ -377,9 +417,8 @@ class PrintOperationInfo(object):
     def __call__(self, state):
         if (self.state is None or self.state.is_starting()) and not state.is_starting():
             unrecognized_spec = get_operation_attributes(
-                self.operation,
-                fields=["unrecognized_spec"],
-                client=self.client)
+                self.operation, fields=["unrecognized_spec"], client=self.client
+            )
             if unrecognized_spec and unrecognized_spec.get("unrecognized_spec"):
                 self.log("Unrecognized spec: %s", str(unrecognized_spec["unrecognized_spec"]))
         if state.is_running():
@@ -389,7 +428,8 @@ class PrintOperationInfo(object):
                     self.log(
                         "operation %s: %s",
                         self.operation,
-                        " ".join("{0}={1:<5}".format(k, v) for k, v in order_progress(progress)))
+                        " ".join("{0}={1:<5}".format(k, v) for k, v in order_progress(progress)),
+                    )
                 self.progress = progress
                 self.progress_build_time = build_time
         elif state != self.state:
@@ -397,16 +437,15 @@ class PrintOperationInfo(object):
             if state.is_finished():
                 attribute_names = {"alerts": "Alerts"}
                 result = get_operation_attributes(
-                    self.operation,
-                    fields=builtins.list(attribute_names.keys()),
-                    client=self.client)
+                    self.operation, fields=builtins.list(attribute_names.keys()), client=self.client
+                )
                 for attribute, readable_name in attribute_names.items():
                     attribute_value = result.get(attribute)
                     if attribute_value:
                         self.log("%s: %s", readable_name, str(attribute_value))
         self.state = state
 
-    def log(self, message, *args, **kwargs):
+    def log(self, message: str, *args: Any, **kwargs: Any):
         elapsed_seconds = (datetime.now() - self.operation_start_time).total_seconds()
         message = "({0:2} min) ".format(int(elapsed_seconds) // 60) + message
         logger.log(self.level, message, *args, **kwargs)
@@ -452,9 +491,8 @@ def get_jobs_with_error_or_stderr(operation, only_failed_jobs, client=None):
 
         try:
             stderr = to_native_str(
-                get_job_stderr(operation, job, client=client).read(),
-                encoding=stderr_encoding,
-                errors="replace")
+                get_job_stderr(operation, job, client=client).read(), encoding=stderr_encoding, errors="replace"
+            )
         except join_exceptions(get_retriable_errors(), YtResponseError) as err:
             if isinstance(err, YtResponseError) and err.is_no_such_job():
                 pass
@@ -488,7 +526,8 @@ def get_jobs_with_error_or_stderr(operation, only_failed_jobs, client=None):
         include_runtime=False,
         with_stderr=with_stderr,
         job_state=job_state,
-        client=client)
+        client=client,
+    )
 
     jobs = []
     for info in response["jobs"]:
@@ -519,7 +558,7 @@ def get_jobs_with_error_or_stderr(operation, only_failed_jobs, client=None):
     return result
 
 
-def format_operation_stderr(job_with_stderr, output):
+def format_operation_stderr(job_with_stderr: YsonMap, output):
     output.write("Host: ")
     output.write(job_with_stderr["host"])
     output.write("\n")
@@ -534,7 +573,7 @@ def format_operation_stderr(job_with_stderr, output):
         output.write("\n")
 
 
-def format_operation_stderrs(jobs_with_stderr):
+def format_operation_stderrs(jobs_with_stderr: Iterable[YsonMap]):
     """Formats operation jobs with stderr to string."""
     output = StringIO()
     for job_with_stderr in jobs_with_stderr:
@@ -552,10 +591,11 @@ def add_failed_operation_stderrs_to_error_message(func):
             if "stderrs" in error.attributes:
                 error.message = error.message + format_operation_stderrs(error.attributes["stderrs"])
             raise
+
     return decorator(_add_failed_operation_stderrs_to_error_message, func)
 
 
-def get_operation_error(operation, client=None):
+def get_operation_error(operation: str, client: YtClient | None = None):
     # NB(ignat): conversion to json type necessary for json.dumps in TM.
     # TODO(ignat): we should decide what format should be used in errors (now it is yson both here and in http.py).
     result = yson.yson_to_json(get_operation_attributes(operation, fields=["result"], client=client).get("result", {}))
@@ -565,18 +605,13 @@ def get_operation_error(operation, client=None):
 
 
 # TODO(ignat): remove this method with all usages in arcadia.
-def _create_operation_failed_error(operation, state):
+def _create_operation_failed_error(operation: str, state):
     error = get_operation_error(operation.id, client=operation.client)
     stderrs = get_jobs_with_error_or_stderr(operation.id, only_failed_jobs=True, client=operation.client)
-    return YtOperationFailedError(
-        id=operation.id,
-        state=str(state),
-        error=error,
-        stderrs=stderrs,
-        url=operation.url)
+    return YtOperationFailedError(id=operation.id, state=str(state), error=error, stderrs=stderrs, url=operation.url)
 
 
-def process_operation_unsuccessful_finish_state(operation, error):
+def process_operation_unsuccesful_finish_state(operation: str, error):
     assert error is not None
     if get_config(operation.client)["operation_tracker"]["enable_logging_failed_operation"]:
         logger.warning("***** Failed operation information:\n%s", str(error))
@@ -587,7 +622,7 @@ def process_operation_unsuccessful_finish_state(operation, error):
     raise error
 
 
-def get_operation_url(operation, client=None):
+def get_operation_url(operation: str, client: YtClient | None = None) -> str:
     proxy_url = get_proxy_address_url(required=False, client=client)
     if not proxy_url:
         return None
@@ -605,23 +640,52 @@ def get_operation_url(operation, client=None):
             proxy = get_proxy_address_url(client=client)
 
     return get_config(client)["proxy"]["operation_link_pattern"].format(
-        proxy=proxy,
-        cluster_path=cluster_path,
-        id=operation)
+        proxy=proxy, cluster_path=cluster_path, id=operation
+    )
 
 
 class Operation(object):
     """Holds information about started operation."""
-    def __init__(self, id,
-                 type=None, finalization_actions=None,
-                 abort_exceptions=(KeyboardInterrupt, TimeoutError), client=None):
-        self.id = id
-        self.type = type
+
+    @property
+    def id(self) -> str:
+        ...
+
+    @property
+    def type(self) -> str:
+        ...
+
+    @property
+    def abort_exceptions(self) -> tuple[type[BaseException], ...]:
+        ...
+
+    @property
+    def client(self) -> YtClient | None:
+        ...
+
+    @property
+    def printer(self) -> PrintOperationInfo:
+        ...
+
+    @property
+    def url(self) -> str:
+        ...
+
+    def __init__(
+        self,
+        id: str,
+        type: str | None = None,
+        finalization_actions=None,
+        abort_exceptions=(KeyboardInterrupt, TimeoutError),
+        client: YtClient | None = None,
+    ):
+        self.id: str = id
+        self.type: str = type or ""
         self.abort_exceptions = abort_exceptions
         self.finalization_actions = finalization_actions
         self.client = client
         self.printer = PrintOperationInfo(id, client=client)
-        self.url = get_operation_url(id, client=client)
+        self.url: str = get_operation_url(id, client=client)
 
     def suspend(self):
         """Suspends operation."""
@@ -631,7 +695,7 @@ class Operation(object):
         """Resumes operation."""
         resume_operation(self.id, client=self.client)
 
-    def abort(self, reason=None):
+    def abort(self, reason: str | None = None):
         """Aborts operation."""
         abort_operation(self.id, reason, client=self.client)
 
@@ -643,7 +707,7 @@ class Operation(object):
         """Returns iterator over operation progress states."""
         return get_operation_state_monitor(self.id, time_watcher, action, client=self.client)
 
-    def get_attributes(self, fields=None):
+    def get_attributes(self, fields: list[str] | None = None):
         """Returns all operation attributes."""
         return get_operation_attributes(self.id, fields=fields, client=self.client)
 
@@ -661,11 +725,11 @@ class Operation(object):
         """Returns dictionary that represents number of different types of jobs."""
         return get_operation_progress(self.id, client=self.client)
 
-    def get_state(self):
+    def get_state(self) -> OperationState:
         """Returns object that represents state of operation."""
         return get_operation_state(self.id, client=self.client)
 
-    def get_jobs_with_error_or_stderr(self, only_failed_jobs=False):
+    def get_jobs_with_error_or_stderr(self, only_failed_jobs: bool = False):
         """Returns list of objects thar represents jobs with stderrs.
         Each object is dict with keys "stderr", "error" (if applicable), "host".
 
@@ -673,7 +737,7 @@ class Operation(object):
         """
         return get_jobs_with_error_or_stderr(self.id, only_failed_jobs=only_failed_jobs, client=self.client)
 
-    def get_error(self, state=None):
+    def get_error(self, state: str | None = None) -> YtOperationFailedError | None:
         """Returns YtOperationFailed error if operation has failed, otherwise returns None."""
         if state is None:
             state = self.get_state()
@@ -686,22 +750,17 @@ class Operation(object):
             return None
 
         stderrs = self.get_jobs_with_error_or_stderr(only_failed_jobs=True)
-        return YtOperationFailedError(
-            id=self.id,
-            state=str(state),
-            error=error,
-            stderrs=stderrs,
-            url=self.url)
+        return YtOperationFailedError(id=self.id, state=str(state), error=error, stderrs=stderrs, url=self.url)
 
     @deprecated(alternative="get_jobs_with_error_or_stderr")
-    def get_stderrs(self, only_failed_jobs=False):
-        """ Deprecated!
+    def get_stderrs(self, only_failed_jobs: bool = False):
+        """Deprecated!
 
         Use get_jobs_with_error_or_stderr instead.
         """
         return get_jobs_with_error_or_stderr(self.id, only_failed_jobs=only_failed_jobs, client=self.client)
 
-    def exists(self):
+    def exists(self) -> bool:
         """Checks if operation attributes can be fetched from Cypress."""
         try:
             self.get_attributes()
@@ -712,7 +771,7 @@ class Operation(object):
 
         return True
 
-    def wait(self, check_result=True, print_progress=True, timeout=None):
+    def wait(self, check_result: bool = True, print_progress: bool = True, timeout: int | None = None):
         """Synchronously tracks operation, prints current progress and finalize at the completion.
 
         If operation failed, raises :class:`YtOperationFailedError <yt.wrapper.errors.YtOperationFailedError>`.
@@ -725,9 +784,9 @@ class Operation(object):
 
         finalization_actions = flatten(self.finalization_actions) if self.finalization_actions else []
         operation_poll_period = get_config(self.client)["operation_tracker"]["poll_period"] / 1000.0
-        time_watcher = TimeWatcher(min_interval=operation_poll_period / 10.0,
-                                   max_interval=operation_poll_period,
-                                   slowdown_coef=0.2)
+        time_watcher = TimeWatcher(
+            min_interval=operation_poll_period / 10.0, max_interval=operation_poll_period, slowdown_coef=0.2
+        )
         print_info = self.printer if print_progress else lambda state: None
 
         def abort():
@@ -750,7 +809,7 @@ class Operation(object):
                 finalize_function(state)
 
         if check_result and state.is_unsuccessfully_finished():
-            process_operation_unsuccessful_finish_state(self, self.get_error(state=state))
+            process_operation_unsuccesful_finish_state(self, self.get_error(state=state))
 
         if get_config(self.client)["operation_tracker"]["log_job_statistics"]:
             statistics = self.get_job_statistics()
@@ -759,6 +818,10 @@ class Operation(object):
 
         stderr_level = logging.getLevelName(get_config(self.client)["operation_tracker"]["stderr_logging_level"])
         if logger.LOGGER.isEnabledFor(stderr_level):
-            stderrs = get_jobs_with_error_or_stderr(self.id, only_failed_jobs=not get_config(self.client)["operation_tracker"]["always_show_job_stderr"], client=self.client)
+            stderrs = get_jobs_with_error_or_stderr(
+                self.id,
+                only_failed_jobs=not get_config(self.client)["operation_tracker"]["always_show_job_stderr"],
+                client=self.client,
+            )
             if stderrs:
                 logger.log(stderr_level, "\n" + format_operation_stderrs(stderrs))

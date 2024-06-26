@@ -1,8 +1,26 @@
 from contextlib import contextmanager
 
+from typing import (
+    ContextManager,
+)
+
+from .client_impl import (
+    YtClient,
+)
+from .typing_hack import (
+    TPath,
+    TAttributes,
+)
+
 
 @contextmanager
-def TempTable(path=None, prefix=None, attributes=None, expiration_timeout=None, client=None):
+def TempTable(
+    path: TPath | None = None,
+    prefix: str | None = None,
+    attributes: TAttributes | None = None,
+    expiration_timeout: int | None = None,
+    client: YtClient | None = None,
+) -> ContextManager[str]:
     """Creates temporary table in given path with given prefix on scope enter and \
        removes it on scope exit.
 

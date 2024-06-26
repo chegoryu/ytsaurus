@@ -25,18 +25,10 @@ import yt.wrapper.cli_impl as cli_impl
 import yt.wrapper.job_tool as yt_job_tool
 import yt.wrapper.run_compression_benchmarks as yt_run_compression_benchmarks
 import yt.wrapper.completers as completers
-try:
-    import yt.wrapper.idm_cli_helpers as idm
-    HAS_IDM_CLI_HELPERS = True
-except ImportError:
-    HAS_IDM_CLI_HELPERS = False
+HAS_IDM_CLI_HELPERS = False
 
-try:
-    from yt.packages.six import PY3, iteritems
-    from yt.packages.six.moves import builtins, map as imap, zip_longest as izip_longest
-except ImportError:
-    from six import PY3, iteritems
-    from six.moves import builtins, map as imap, zip_longest as izip_longest
+from six import PY3, iteritems
+from six.moves import builtins, map as imap, zip_longest as izip_longest
 
 import yt.wrapper as yt
 import yt.clickhouse as chyt

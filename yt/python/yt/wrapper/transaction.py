@@ -1,5 +1,14 @@
-from .config import (get_option, set_option, get_config,
-                     get_command_param, set_command_param, del_command_param, get_backend_type)
+from typing import Literal
+from .client_impl import YtClient
+from .config import (
+    get_option,
+    set_option,
+    get_config,
+    get_command_param,
+    set_command_param,
+    del_command_param,
+    get_backend_type,
+)
 from .common import get_value, time_option_to_milliseconds
 from .default_config import retries_config
 from .errors import YtResponseError, YtError, YtTransactionPingError
@@ -98,19 +107,32 @@ class Transaction(object):
     .. seealso:: `transactions in the docs <https://ytsaurus.tech/docs/en/user-guide/storage/transactions>`_
     """
 
-    def __init__(self, timeout=None, deadline=None, attributes=None, ping=None, interrupt_on_failed=True,
-                 transaction_id=None, ping_ancestor_transactions=None, type="master", acquire=None,
-                 ping_period=None, ping_timeout=None, prerequisite_transaction_ids=None,
-                 client=None):
+    def __init__(
+        self,
+        timeout: int | None = None,
+        deadline: int | None = None,
+        attributes: TAttributes | None = None,
+        ping: bool | None = None,
+        interrupt_on_failed: bool = True,
+        transaction_id: str | None = None,
+        ping_ancestor_transactions: bool | None = None,
+        type: Literal["master", "tablet"] = 'master',
+        acquire: bool | None = None,
+        ping_period: int | None = None,
+        ping_timeout: int | None = None,
+        prerequisite_transaction_ids: list[str] | None = None,
+        client: YtClient | None = None,
+    ):
         if transaction_id == null_transaction_id:
             ping = False
             acquire = False
 
         self.transaction_id = transaction_id
-        self.sticky = (type == "tablet" and get_backend_type(client) == "http")
+        self.sticky = type == "tablet" and get_backend_type(client) == "http"
         self._client = client
-        self._ping_ancestor_transactions = \
-            get_value(ping_ancestor_transactions, get_command_param("ping_ancestor_transactions", self._client))
+        self._ping_ancestor_transactions = get_value(
+            ping_ancestor_transactions, get_command_param("ping_ancestor_transactions", self._client)
+        )
         self._ping = ping
         self._acquire = acquire
         self._finished = False
@@ -119,11 +141,17 @@ class Transaction(object):
         if get_option("_transaction_stack", self._client) is None:
             set_option("_transaction_stack", TransactionStack(), self._client)
         self._stack = get_option("_transaction_stack", self._client)
-        self._stack.init(get_command_param("transaction_id", self._client),
-                         get_command_param("ping_ancestor_transactions", self._client))
+        self._stack.init(
+            get_command_param("transaction_id", self._client),
+            get_command_param("ping_ancestor_transactions", self._client),
+        )
 
         if self.transaction_id is not None and prerequisite_transaction_ids:
-            raise RuntimeError("prerequisite_transaction_ids={!r} must be None or empty when transaction_id is not None".format(prerequisite_transaction_ids))
+            raise RuntimeError(
+                "prerequisite_transaction_ids={!r} must be None or empty when transaction_id is not None".format(
+                    prerequisite_transaction_ids
+                )
+            )
 
         if self.transaction_id is None:
             if self._acquire is None:
@@ -131,29 +159,35 @@ class Transaction(object):
             elif not self._acquire:
                 raise RuntimeError(
                     'acquire={!r} (false value) is not allowed when '
-                    'transaction_id is not specified'
-                    .format(self._acquire)
+                    'transaction_id is not specified'.format(self._acquire)
                 )
 
-            timeout = time_option_to_milliseconds(get_value(
-                timeout,
-                max(
-                    # Some legacy logic.
+            timeout = time_option_to_milliseconds(
+                get_value(
+                    timeout,
                     max(
-                        time_option_to_milliseconds(get_config(client)["proxy"]["retries"]["total_timeout"]),
-                        time_option_to_milliseconds(get_config(client)["proxy"]["request_timeout"]),
+                        # Some legacy logic.
+                        max(
+                            time_option_to_milliseconds(get_config(client)["proxy"]["retries"]["total_timeout"]),
+                            time_option_to_milliseconds(get_config(client)["proxy"]["request_timeout"]),
+                        ),
+                        time_option_to_milliseconds(get_config(client)["transaction_timeout"]),
                     ),
-                    time_option_to_milliseconds(get_config(client)["transaction_timeout"]))
-            ))
-            self.transaction_id = start_transaction(timeout=timeout,
-                                                    deadline=deadline,
-                                                    attributes=attributes,
-                                                    type=type,
-                                                    sticky=self.sticky,
-                                                    prerequisite_transaction_ids=prerequisite_transaction_ids,
-                                                    client=self._client)
+                )
+            )
+            self.transaction_id = start_transaction(
+                timeout=timeout,
+                deadline=deadline,
+                attributes=attributes,
+                type=type,
+                sticky=self.sticky,
+                prerequisite_transaction_ids=prerequisite_transaction_ids,
+                client=self._client,
+            )
+
         elif self._ping:
             from .cypress_commands import get
+
             timeout = get("#{}/@timeout".format(self.transaction_id), client=client)
 
         if self._acquire is None:
@@ -169,10 +203,18 @@ class Transaction(object):
         if self._ping:
             # TODO(ignat): remove this local import
             from .client import YtClient
+
             pinger_client = YtClient(config=deepcopy(get_config(self._client)))
             # For sticky transaction we must use the same client as at transaction creation.
-            for option in ("_driver", "_requests_session", "_token", "_token_cached",
-                           "_api_version", "_commands", "_fqdn"):
+            for option in (
+                "_driver",
+                "_requests_session",
+                "_token",
+                "_token_cached",
+                "_api_version",
+                "_commands",
+                "_fqdn",
+            ):
                 set_option(option, get_option(option, client=self._client), client=pinger_client)
             self._ping_thread = PingTransaction(
                 self.transaction_id,
@@ -180,7 +222,8 @@ class Transaction(object):
                 ping_period=get_value(ping_period, timeout / 3),
                 ping_timeout=get_value(ping_timeout, timeout / 3),
                 interrupt_on_failed=interrupt_on_failed,
-                client=pinger_client)
+                client=pinger_client,
+            )
             self._ping_thread.start()
 
     def abort(self):
@@ -236,8 +279,8 @@ class Transaction(object):
         enable_params_logging = get_config(self._client)["enable_logging_for_params_changes"]
         if enable_params_logging:
             logger.debug(
-                "Setting \"transaction_id\" and \"ping_ancestor_transactions\" to params (pid: %d)",
-                os.getpid())
+                "Setting \"transaction_id\" and \"ping_ancestor_transactions\" to params (pid: %d)", os.getpid()
+            )
         if self.transaction_id is None:
             del_command_param("transaction_id", self._client)
         else:
@@ -265,10 +308,7 @@ class Transaction(object):
             if action == "abort":
                 # NB: logger may be socket logger. In this case we should convert error to string to avoid
                 # bug with unpickling Exception that has non-trivial __init__.
-                logger.debug(
-                    "Error %s, aborting transaction %s ...",
-                    repr(value),
-                    self.transaction_id)
+                logger.debug("Error %s, aborting transaction %s ...", repr(value), self.transaction_id)
 
             try:
                 if action == "commit":
@@ -292,8 +332,8 @@ class Transaction(object):
             enable_params_logging = get_config(self._client)["enable_logging_for_params_changes"]
             if enable_params_logging:
                 logger.debug(
-                    "Setting \"transaction_id\" and \"ping_ancestor_transactions\" to params (pid: %d)",
-                    os.getpid())
+                    "Setting \"transaction_id\" and \"ping_ancestor_transactions\" to params (pid: %d)", os.getpid()
+                )
             if transaction_id is None:
                 del_command_param("transaction_id", self._client)
             else:
@@ -319,6 +359,7 @@ class PingTransaction(Thread):
 
     Pings transaction in background thread.
     """
+
     def __init__(self, transaction, ping_period, ping_timeout, interrupt_on_failed=True, client=None):
         """
         :param int ping_period: ping period in milliseconds.
@@ -339,18 +380,23 @@ class PingTransaction(Thread):
             backoff={
                 "policy": "constant_time",
                 "constant_time": self.ping_period / 5,
-            })
+            },
+        )
         self._client = client
 
         self.ignore_no_such_transaction_error = False
 
         ping_failed_mode = _get_ping_failed_mode(self._client)
         if ping_failed_mode not in PING_FAILED_MODES:
-            raise YtError("Incorrect ping failed mode {}, expects one of {!r}".format(ping_failed_mode, PING_FAILED_MODES))
+            raise YtError(
+                "Incorrect ping failed mode {}, expects one of {!r}".format(ping_failed_mode, PING_FAILED_MODES)
+            )
         if ping_failed_mode == "call_function":
             ping_failed_function = get_config(client)["ping_failed_function"]
             if not callable(ping_failed_function):
-                raise YtError("Incorrect or missing ping_failed_function {}, must be callable".format(ping_failed_function))
+                raise YtError(
+                    "Incorrect or missing ping_failed_function {}, must be callable".format(ping_failed_function)
+                )
 
     def __enter__(self):
         self.start()

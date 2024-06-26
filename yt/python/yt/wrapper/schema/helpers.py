@@ -1,10 +1,7 @@
 from ..errors import YtError
 from ..skiff import check_skiff_bindings
 
-try:
-    from yt.packages.six import PY3
-except ImportError:
-    from six import PY3
+from six import PY3
 
 import sys
 

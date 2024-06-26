@@ -1,7 +1,6 @@
-try:
-    from yt.packages.six import PY3, integer_types, binary_type, text_type
-except ImportError:
-    from six import PY3, integer_types, binary_type, text_type
+from six import PY3, integer_types, binary_type, text_type
+
+from typing import Any
 
 from yt.common import YtError
 
@@ -16,7 +15,7 @@ class YsonType(object):
     def has_attributes(self):
         try:
             return "attributes" in self.__dict__ and self.attributes is not None and self.attributes != {}
-        except:  # noqa
+        except:
             return False
 
     def __eq__(self, other):
@@ -170,7 +169,7 @@ def is_unicode(x):
     return isinstance(x, text_type)
 
 
-def get_bytes(x, encoding="utf8"):
+def get_bytes(x, encoding="utf8") -> bytes:
     if isinstance(x, text_type):
         return x.encode(encoding)
     elif isinstance(x, YsonStringProxy):
@@ -262,7 +261,7 @@ class YsonBoolean(int, YsonType):
         return self.__repr__()
 
 
-class YsonList(list, YsonType):
+class YsonList(list[Any], YsonType):
     def __eq__(self, other):
         if not isinstance(other, list):
             return NotImplemented
@@ -281,7 +280,7 @@ class YsonList(list, YsonType):
         return self.to_str(list, str)
 
 
-class YsonMap(dict, YsonType):
+class YsonMap(dict[str, Any], YsonType):
     def __eq__(self, other):
         if not isinstance(other, dict):
             return NotImplemented

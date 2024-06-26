@@ -1,13 +1,15 @@
 import six
 
+from typing import (
+    Any,
+    Self,
+    TypedDict,
+)
+
 from abc import ABCMeta, abstractmethod
 
 
-def _with_type(x):
-    return "<type: {!s}>: {!r}".format(type(x), x)
-
-
-def _is_utf8(s):
+def _is_utf8(s: str | bytes) -> bool:
     if not isinstance(s, six.string_types):
         return False
 
@@ -20,7 +22,7 @@ def _is_utf8(s):
     return isinstance(s, six.text_type)
 
 
-def _as_utf8(s):
+def _as_utf8(s: str | bytes) -> str:
     if isinstance(s, six.text_type):
         return s
     elif isinstance(s, six.binary_type):
@@ -29,30 +31,25 @@ def _as_utf8(s):
         raise TypeError("expected string or binary type, but got {}".format(type(s)))
 
 
-def is_valid_type(x):
-    return isinstance(x, Type) or x is Type
-
-
-def validate_type(x):
-    if not is_valid_type(x):
-        raise ValueError("Expected type, but got {}".format(_with_type(x)))
-
-
-def quote_string(s):
+def quote_string(s: str) -> str:
     return u"'{}'".format(s.replace("\\", "\\\\").replace("'", "\\'"))
 
 
 class Type(six.with_metaclass(ABCMeta)):
     REQUIRED_ATTRS = ["name", "yt_type_name"]
 
-    def __init__(self, attrs):
-        assert all(key in attrs for key in self.REQUIRED_ATTRS), \
-            "One or more of required arguments not found in attributes"
+    def __init__(self, attrs: dict[str, Any]):
+        assert all(
+            key in attrs for key in self.REQUIRED_ATTRS
+        ), "One or more of required arguments not found in attributes"
+
+        self.name: str = ""
+        self.yt_type_name: str = ""
 
         for name, value in attrs.items():
             setattr(self, name, value)
 
-    def __eq__(self, other):
+    def __eq__(self, other: "Type") -> bool:
         assert isinstance(self, Type)
 
         if not isinstance(other, Type):
@@ -60,26 +57,39 @@ class Type(six.with_metaclass(ABCMeta)):
 
         return str(self) == str(other)
 
-    def __ne__(self, other):
+    def __ne__(self, other: "Type") -> bool:
         return not (self == other)
 
     def __hash__(self):
         return hash(str(self))
 
     @abstractmethod
-    def __str__(self):
+    def __str__(self) -> str:
         pass
 
     @abstractmethod
-    def to_yson_type(self):
+    def to_yson_type(self) -> Any:
         pass
 
 
+def is_valid_type(x: Type) -> bool:
+    return isinstance(x, Type) or x is Type
+
+
+def _with_type(x: Any) -> str:
+    return "<type: {!s}>: {!r}".format(type(x), x)
+
+
+def validate_type(x: Type):
+    if not is_valid_type(x):
+        raise ValueError("Expected type, but got {}".format(_with_type(x)))
+
+
 class Primitive(Type):
-    def __str__(self):
+    def __str__(self) -> str:
         return self.name
 
-    def to_yson_type(self):
+    def to_yson_type(self) -> str:
         return self.yt_type_name
 
     def to_yson_type_v1(self):
@@ -87,24 +97,25 @@ class Primitive(Type):
 
 
 class Generic(six.with_metaclass(ABCMeta)):
-    def __init__(self, name, yt_type_name=None):
+    def __init__(self, name: str, yt_type_name: str | None = None):
         assert _is_utf8(name), "Name must be UTF-8, got {}".format(_with_type(name))
         self.name = name
         self.yt_type_name = name.lower()
 
     @abstractmethod
-    def __getitem__(self, param):
+    def __getitem__(self, param: Any) -> Self:
         pass
 
     @abstractmethod
-    def from_dict(self):
+    def from_dict(self, dict_: dict[str, Any]) -> Self:
         pass
 
 
-def make_primitive_type(name, yt_type_name=None, yt_type_name_v1=None):
+def make_primitive_type(name: str, yt_type_name: str | None = None, yt_type_name_v1: str | None = None) -> Primitive:
     assert _is_utf8(name), "Name of primitive type must be UTF-8, got {}".format(_with_type(name))
-    assert yt_type_name is None or _is_utf8(yt_type_name), \
-        "YT type name of primitive type must be UTF-8, got {}".format(_with_type(name))
+    assert yt_type_name is None or _is_utf8(
+        yt_type_name
+    ), "YT type name of primitive type must be UTF-8, got {}".format(_with_type(name))
 
     if yt_type_name is None:
         yt_type_name = name.lower()
@@ -112,8 +123,10 @@ def make_primitive_type(name, yt_type_name=None, yt_type_name_v1=None):
     if yt_type_name_v1 is None:
         yt_type_name_v1 = name.lower()
 
-    return Primitive({
-        "name": name,
-        "yt_type_name": yt_type_name,
-        "yt_type_name_v1": yt_type_name_v1,
-    })
+    return Primitive(
+        {
+            "name": name,
+            "yt_type_name": yt_type_name,
+            "yt_type_name_v1": yt_type_name_v1,
+        }
+    )

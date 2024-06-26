@@ -1,7 +1,5 @@
 from __future__ import print_function
 
-from typing import Optional, Tuple
-
 from . import common
 from .config_remote_patch import RemotePatchableValueBase, RemotePatchableString, RemotePatchableBoolean, _validate_operation_link_pattern  # noqa
 from .constants import DEFAULT_HOST_SUFFIX, SKYNET_MANAGER_URL, PICKLING_DL_ENABLE_AUTO_COLLECTION
@@ -12,6 +10,11 @@ import yt.logger as logger
 import yt.yson as yson
 import yt.json_wrapper as json
 from yt.yson import YsonEntity, YsonMap
+
+from typing import (
+    Any,
+    Optional,
+)
 
 import os
 from copy import deepcopy
@@ -670,15 +673,6 @@ default_config = {
     # i.e. do not throw exception while declare "weak" reading (f.e. read Optional[int] into int)
     # but throw excepion while reading bad data (if None really occurs)
     "runtime_type_validation": False,
-
-    # Strawberry controller address.
-    # May contain {stage}, {family} and {host_suffix} parameters.
-    # NB: this option can be overridden with settings from cluster.
-    "strawberry_ctl_address": RemotePatchableString("{stage}.{family}-ctl{host_suffix}", "strawberry_ctl_address"),
-    # Cluster name under which the cluster is configured in the strawberry controller.
-    # If |None|, the proxy url is used.
-    # NB: this option can be overridden with settings from cluster.
-    "strawberry_cluster_name": RemotePatchableString(None, "strawberry_cluster_name"),
 }
 
 # pydoc :: default_config :: end
@@ -693,7 +687,7 @@ def transform_value(value, original_value):
     return value
 
 
-def get_default_config():
+def get_default_config() -> dict[str, Any]:
     """Returns default configuration of python API."""
     template_dict = deepcopy(default_config)
     template_dict["proxy"] = VerifiedDict(
@@ -711,9 +705,8 @@ def get_default_config():
 
 
 FORCED_SHORTCUTS = {
-    "BASE_LAYER" : "operation_base_layer",
+    "BASE_LAYER": "operation_base_layer",
 }
-
 
 SHORTCUTS = {
     "PROXY": "proxy/url",
@@ -768,7 +761,7 @@ SHORTCUTS = {
     "POOL": "pool",
     "MEMORY_LIMIT": "memory_limit",
     "SPEC": "spec_defaults",
-    "BASE_LAYER": "operation_base_layer",
+    "BASE_LAYER" : "operation_base_layer",
     "TABLE_WRITER": "table_writer",
 
     "RETRY_READ": "read_retries/enable",
@@ -789,11 +782,11 @@ SHORTCUTS = {
     "USE_YAMR_DEFAULTS": "yamr_mode/use_yamr_defaults",
     "IGNORE_EMPTY_TABLES_IN_MAPREDUCE_LIST": "yamr_mode/ignore_empty_tables_in_mapreduce_list",
 
-    "CONFIG_PROFILE": "config_profile",
+     "CONFIG_PROFILE": "config_profile",
 }
 
 
-def update_config_from_env(config, config_profile=None):
+def update_config_from_env(config: dict[str, Any], config_profile: str | None = None) -> dict[str, Any]:
     # type: (yt.wrapper.mappings.VerifiedDict) -> yt.wrapper.mappings.VerifiedDict
     """Patch config from envs and the config file."""
 
@@ -804,7 +797,6 @@ def update_config_from_env(config, config_profile=None):
     _update_from_env_vars(config)
 
     return config
-
 
 def _update_from_env_vars(config, shortcuts=None):
     # type: (yt.wrapper.mappings.VerifiedDict, dict | None) -> None
@@ -888,7 +880,6 @@ def _update_from_env_patch(config):
         except Exception as e:  # noqa
             raise YtConfigError("Failed to apply config from 'YT_CONFIG_PATCHES' environment variable") from e
 
-
 class ConfigParserV2:
     VERSION = 2
     _PROFILES_KEY = "profiles"
@@ -936,7 +927,7 @@ class _ConfigFSLoader:
             pass
         return False
 
-    def read_config(self) -> Tuple[Optional[bytes], Optional[str]]:
+    def read_config(self) -> tuple[Optional[bytes], Optional[str]]:
         path = self._get_config_path()
         if path is None:
             return None, None
@@ -1015,7 +1006,7 @@ def _update_from_file(
     common.update_inplace(config, config_from_file)
 
 
-def get_config_from_env(config_profile=None):
+def get_config_from_env(config_profile: str | None = None) -> dict[str, Any]:
     # type: (str) -> yt.wrapper.mappings.VerifiedDict
     """Get default config with patches from envs"""
     return update_config_from_env(get_default_config(), config_profile=config_profile)

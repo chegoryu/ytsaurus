@@ -1,32 +1,43 @@
 from . import type_base
 
 # Backward compatibility
-from .type_base import (  # noqa
-    is_valid_type, validate_type, Type
-)
+from .type_base import TypedDict, is_valid_type, validate_type, Type  # noqa
 
-try:
-    import yt.yson
-    _TI_SERIALIZATION_AVAILABLE = True
-except ImportError:
-    _TI_SERIALIZATION_AVAILABLE = False
+import yt.yson
+
+_TI_SERIALIZATION_AVAILABLE = True
 
 import six
+
+from typing import (
+    Any,
+    Iterable,
+    Self,
+)
+
+from yt.yson.yson_types import (
+    YsonType,
+)
+
+
+class SingleArgumentGenericTypedDict(TypedDict):
+    type_name: str
+    item: Any
 
 
 @six.python_2_unicode_compatible
 class _SingleArgumentGenericAlias(type_base.Type):
     REQUIRED_ATTRS = type_base.Type.REQUIRED_ATTRS + ["item"]
 
-    def __str__(self):
+    def __str__(self) -> str:
         return "{}<{}>".format(self.name, self.item)
 
-    def to_yson_type(self):
+    def to_yson_type(self) -> SingleArgumentGenericTypedDict:
         return {"type_name": self.name.lower(), "item": self.item.to_yson_type()}
 
 
 class _SingleArgumentGeneric(type_base.Generic):
-    def __getitem__(self, param):
+    def __getitem__(self, param: Type) -> Self:
         type_base.validate_type(param)
 
         attrs = {
@@ -37,13 +48,13 @@ class _SingleArgumentGeneric(type_base.Generic):
 
         return _SingleArgumentGenericAlias(attrs)
 
-    def from_dict(self, type_):
-        _validate_contains(type_, "item")
-        param = _parse_type(type_["item"])
+    def from_dict(self, dict_: SingleArgumentGenericTypedDict) -> Self:
+        _validate_contains(dict_, "item")
+        param = _parse_type(dict_["item"])
         return self.__getitem__(param)
 
 
-def _make_tuple_attrs(items, type_name, yt_type_name):
+def _make_tuple_attrs(items: Iterable[Type], type_name: str, yt_type_name: str) -> dict[str, Any]:
     for item in items:
         type_base.validate_type(item)
 
@@ -56,31 +67,37 @@ def _make_tuple_attrs(items, type_name, yt_type_name):
     return attrs
 
 
+class GenericTupleTypedDictElement(TypedDict):
+    type: Any
+
+
+class GenericTupleTypedDict(TypedDict):
+    type_name: str
+    elements: list[GenericTupleTypedDictElement]
+
+
 @six.python_2_unicode_compatible
 class _TupleAlias(type_base.Type):
     REQUIRED_ATTRS = type_base.Type.REQUIRED_ATTRS + ["items"]
 
-    def __str__(self):
+    def __str__(self) -> str:
         return "{}<{}>".format(self.name, ", ".join(str(x) for x in self.items))
 
-    def to_yson_type(self):
-        yson_repr = {
-            "type_name": self.yt_type_name,
-            "elements": [{"type": item.to_yson_type()} for item in self.items]
-        }
+    def to_yson_type(self) -> GenericTupleTypedDict:
+        yson_repr = {"type_name": self.yt_type_name, "elements": [{"type": item.to_yson_type()} for item in self.items]}
         return yson_repr
 
 
 class _GenericTuple(type_base.Generic):
-    def __getitem__(self, params):
+    def __getitem__(self, params: Type | tuple[Type, ...]) -> Self:
         if not isinstance(params, tuple):
             params = (params,)
         return _TupleAlias(_make_tuple_attrs(params, self.name, self.yt_type_name))
 
-    def from_dict(self, type_):
-        _validate_contains(type_, "elements")
+    def from_dict(self, dict_: GenericTupleTypedDict) -> Self:
+        _validate_contains(dict_, "elements")
 
-        elements = type_["elements"]
+        elements = dict_["elements"]
         _validate(isinstance(elements, list), "\"elements\" must contain a list")
         _validate(all(isinstance(elem, dict) for elem in elements), "\"elements\" must contain a list of maps")
 
@@ -92,19 +109,25 @@ class _GenericTuple(type_base.Generic):
         return self.__getitem__(tuple(params))
 
 
+class GenericDictTypedDict(TypedDict):
+    type_name: str
+    key: Any
+    value: Any
+
+
 @six.python_2_unicode_compatible
 class _DictAlias(type_base.Type):
     REQUIRED_ATTRS = type_base.Type.REQUIRED_ATTRS + ["key", "value"]
 
-    def __str__(self):
+    def __str__(self) -> str:
         return "{}<{}, {}>".format(self.name, self.key, self.value)
 
-    def to_yson_type(self):
+    def to_yson_type(self) -> GenericDictTypedDict:
         return {"type_name": self.yt_type_name, "key": self.key.to_yson_type(), "value": self.value.to_yson_type()}
 
 
 class _GenericDict(type_base.Generic):
-    def __getitem__(self, params):
+    def __getitem__(self, params: tuple[Type, Type]) -> Self:
         if not isinstance(params, tuple) or len(params) != 2:
             raise ValueError("Expected two types in Dict, but got {}".format(type_base._with_type(params)))
         key, value = params
@@ -120,15 +143,25 @@ class _GenericDict(type_base.Generic):
 
         return _DictAlias(attrs)
 
-    def from_dict(self, type_):
-        _validate_contains(type_, "key")
-        _validate_contains(type_, "value")
-        key = _parse_type(type_["key"])
-        value = _parse_type(type_["value"])
+    def from_dict(self, dict_: GenericDictTypedDict) -> Self:
+        _validate_contains(dict_, "key")
+        _validate_contains(dict_, "value")
+        key = _parse_type(dict_["key"])
+        value = _parse_type(dict_["value"])
         return self.__getitem__((key, value))
 
 
-def _validate_struct_fields(items):
+class GenericStructTypedDictMember(TypedDict):
+    name: str
+    type: Any
+
+
+class GenericStructTypedDict(TypedDict):
+    type_name: str
+    members: list[GenericStructTypedDictMember]
+
+
+def _validate_struct_fields(items: Iterable[tuple[str, Type]]):
     names = set()
     for item_name, type_ in items:
         if not type_base._is_utf8(item_name):
@@ -143,13 +176,10 @@ def _validate_struct_fields(items):
         names.add(item_name)
 
 
-def _make_struct_attrs(params, type_name, yt_type_name):
+def _make_struct_attrs(params: Iterable[slice], type_name: str, yt_type_name: str):
     for x in params:
         if not (
-            isinstance(x, slice) and
-            type_base._is_utf8(x.start) and
-            type_base.is_valid_type(x.stop) and
-            x.step is None
+            isinstance(x, slice) and type_base._is_utf8(x.start) and type_base.is_valid_type(x.stop) and x.step is None
         ):
             raise ValueError("Expected slice in form of field:type, but got {}".format(type_base._with_type(x)))
 
@@ -169,34 +199,28 @@ def _make_struct_attrs(params, type_name, yt_type_name):
 class _StructAlias(type_base.Type):
     REQUIRED_ATTRS = type_base.Type.REQUIRED_ATTRS + ["items"]
 
-    def __str__(self):
-        params_str = ", ".join(
-            u"{}: {}".format(type_base.quote_string(name), str(type_))
-            for name, type_ in self.items
-        )
+    def __str__(self) -> str:
+        params_str = ", ".join(u"{}: {}".format(type_base.quote_string(name), str(type_)) for name, type_ in self.items)
         return u"{}<{}>".format(self.name, params_str)
 
-    def to_yson_type(self):
+    def to_yson_type(self) -> GenericStructTypedDict:
         yson_repr = {
             "type_name": self.yt_type_name,
-            "members": [
-                {"name": name, "type": type_.to_yson_type()}
-                for name, type_ in self.items
-            ]
+            "members": [{"name": name, "type": type_.to_yson_type()} for name, type_ in self.items],
         }
         return yson_repr
 
 
 class _GenericStruct(type_base.Generic):
-    def __getitem__(self, params):
+    def __getitem__(self, params: slice | tuple[slice, ...]) -> Self:
         if not isinstance(params, tuple):
             params = (params,)
         return _StructAlias(_make_struct_attrs(params, self.name, self.yt_type_name))
 
-    def from_dict(self, type_):
-        _validate_contains(type_, "members")
+    def from_dict(self, dict_: GenericStructTypedDict) -> Self:
+        _validate_contains(dict_, "members")
 
-        members = type_["members"]
+        members = dict_["members"]
         _validate(isinstance(members, list), "\"members\" must contain a list")
         _validate(all(isinstance(member, dict) for member in members), "\"members\" must contain a list of maps")
 
@@ -212,7 +236,7 @@ class _GenericStruct(type_base.Generic):
 
 
 class _GenericVariant(type_base.Generic):
-    def __getitem__(self, params):
+    def __getitem__(self, params: Type | slice | tuple[Type, ...] | tuple[slice, ...]) -> Self:
         if not isinstance(params, tuple):
             params = (params,)
 
@@ -225,15 +249,17 @@ class _GenericVariant(type_base.Generic):
             attrs["underlying"] = "Tuple"
             return _TupleAlias(attrs)
 
-    def from_dict(self, type_):
-        _validate("elements" in type_ or "members" in type_, "missing both keys \"members\" and \"elements\"")
-        _validate(not ("elements" in type_ and "members" in type_), "both keys \"members\" and \"elements\" are present")
+    def from_dict(self, dict_: GenericTupleTypedDict | GenericStructTypedDict) -> Self:
+        _validate("elements" in dict_ or "members" in dict_, "missing both keys \"members\" and \"elements\"")
+        _validate(
+            not ("elements" in dict_ and "members" in dict_), "both keys \"members\" and \"elements\" are present"
+        )
 
-        if "elements" in type_:
-            cls = Tuple.from_dict(type_)
+        if "elements" in dict_:
+            cls = Tuple.from_dict(dict_)
             cls.underlying = Tuple.name
         else:
-            cls = Struct.from_dict(type_)
+            cls = Struct.from_dict(dict_)
             cls.underlying = Struct.name
 
         cls.name = self.name
@@ -241,14 +267,20 @@ class _GenericVariant(type_base.Generic):
         return cls
 
 
+class GenericTaggedTypedDict(TypedDict):
+    type_name: str
+    item: Any
+    tag: str
+
+
 @six.python_2_unicode_compatible
 class _TaggedAlias(type_base.Type):
     REQUIRED_ATTRS = type_base.Type.REQUIRED_ATTRS + ["item", "tag"]
 
-    def __str__(self):
+    def __str__(self) -> str:
         return u"{}<{}, {}>".format(self.name, str(self.item), type_base.quote_string(self.tag))
 
-    def to_yson_type(self):
+    def to_yson_type(self) -> GenericTaggedTypedDict:
         yson_repr = {
             "type_name": self.yt_type_name,
             "item": self.item.to_yson_type(),
@@ -258,12 +290,12 @@ class _TaggedAlias(type_base.Type):
 
 
 class _GenericTagged(type_base.Generic):
-    def __getitem__(self, params):
+    def __getitem__(self, params: tuple[Type, str | bytes]) -> Self:
         if not (
-            isinstance(params, tuple) and
-            len(params) == 2 and
-            type_base.is_valid_type(params[0]) and
-            (isinstance(params[1], six.string_types) or isinstance(params[1], bytes))
+            isinstance(params, tuple)
+            and len(params) == 2
+            and type_base.is_valid_type(params[0])
+            and (isinstance(params[1], six.string_types) or isinstance(params[1], bytes))
         ):
             raise ValueError("Expected type and tag, but got {}".format(type_base._with_type(params)))
         item, tag = params
@@ -280,25 +312,36 @@ class _GenericTagged(type_base.Generic):
 
         return _TaggedAlias(attrs)
 
-    def from_dict(self, type_):
-        _validate_contains(type_, "tag")
-        _validate_contains(type_, "item")
+    def from_dict(self, dict_: GenericTaggedTypedDict) -> Self:
+        _validate_contains(dict_, "tag")
+        _validate_contains(dict_, "item")
 
-        tag = type_["tag"]
+        tag = dict_["tag"]
         _validate(type_base._is_utf8(tag), "\"tag\" must contain a string")
 
-        item = _parse_type(type_["item"])
-        return self.__getitem__((item, tag,))
+        item = _parse_type(dict_["item"])
+        return self.__getitem__(
+            (
+                item,
+                tag,
+            )
+        )
+
+
+class GenericDecimalTypedDict(TypedDict):
+    type_name: str
+    precision: int
+    scale: int
 
 
 @six.python_2_unicode_compatible
 class _DecimalAlias(type_base.Type):
     REQUIRED_ATTRS = type_base.Type.REQUIRED_ATTRS + ["precision", "scale"]
 
-    def __str__(self):
+    def __str__(self) -> str:
         return "{}({}, {})".format(self.name, self.precision, self.scale)
 
-    def to_yson_type(self):
+    def to_yson_type(self) -> GenericDecimalTypedDict:
         yson_repr = {
             "type_name": self.yt_type_name,
             "precision": self.precision,
@@ -308,7 +351,7 @@ class _DecimalAlias(type_base.Type):
 
 
 class _GenericDecimal(type_base.Generic):
-    def _create_alias(self, precision, scale):
+    def _create_alias(self, precision: int, scale: int):
         if not isinstance(precision, six.integer_types):
             raise ValueError("Expected integer, but got {}".format(type_base._with_type(precision)))
 
@@ -324,21 +367,26 @@ class _GenericDecimal(type_base.Generic):
 
         return _DecimalAlias(attrs)
 
-    def __call__(self, precision, scale):
+    def __call__(self, precision: int, scale: int) -> Self:
         return self._create_alias(precision, scale)
 
-    def __getitem__(self, params):
+    def __getitem__(self, params: tuple[int, int]) -> Self:
         if not isinstance(params, tuple) or len(params) != 2:
             raise ValueError("Expected precision and scale integer parameters")
 
         precision, scale = params
         return self._create_alias(precision, scale)
 
-    def from_dict(self, type_):
-        _validate_contains(type_, "precision")
-        _validate_contains(type_, "scale")
+    def from_dict(self, dict_: GenericDecimalTypedDict) -> Self:
+        _validate_contains(dict_, "precision")
+        _validate_contains(dict_, "scale")
 
-        return self.__getitem__((type_["precision"], type_["scale"],))
+        return self.__getitem__(
+            (
+                dict_["precision"],
+                dict_["scale"],
+            )
+        )
 
 
 Bool = type_base.make_primitive_type("Bool", yt_type_name_v1="boolean")
@@ -387,22 +435,24 @@ PRIMITIVES_V3 = {type_.yt_type_name: type_ for type_ in locals().values() if isi
 GENERICS = {type_.yt_type_name: type_ for type_ in locals().values() if isinstance(type_, type_base.Generic)}
 
 
-def _validate(condition, *error_args):
+def _validate(condition: bool, *error_args: Any) -> None:
     if not condition:
         raise ValueError(*error_args)
 
 
-def _validate_contains(dict, key):
+def _validate_contains(dict: dict[str, Any], key: str) -> None:
     _validate(key in dict, "missing required key \"{}\"".format(key))
 
 
-def _parse_type(type_description):
+def _parse_type(type_description: str | dict[str, Any]) -> Type:
     if isinstance(type_description, six.string_types):
         _validate(type_description in PRIMITIVES_V3, "unknown type \"{}\"".format(type_description))
         return PRIMITIVES_V3[type_description]
 
-    _validate(isinstance(type_description, dict),
-              "type must be either a string or a map, got {}".format(type_base._with_type(type_description)))
+    _validate(
+        isinstance(type_description, dict),
+        "type must be either a string or a map, got {}".format(type_base._with_type(type_description)),
+    )
 
     _validate_contains(type_description, "type_name")
 
@@ -417,7 +467,7 @@ def _parse_type(type_description):
     return GENERICS[type_name].from_dict(type_description)
 
 
-def _parse_type_v1(type_description, required):
+def _parse_type_v1(type_description: str | dict[str, Any], required: bool) -> Type:
     if required:
         _validate(isinstance(type_description, six.string_types), "\"type_description\" must be a string for v1 type")
         _validate(type_description in PRIMITIVES_V1, "unknown type \"{}\"".format(type_description))
@@ -428,11 +478,13 @@ def _parse_type_v1(type_description, required):
 
 def _check_serialization_available():
     if not _TI_SERIALIZATION_AVAILABLE:
-        raise ImportError("Module `yt.yson` is required to use type_info serialization. "
-                          "Make sure you have yt/python/yt/yson in your PEERDIR")
+        raise ImportError(
+            "Module `yt.yson` is required to use type_info serialization. "
+            "Make sure you have yt/python/yt/yson in your PEERDIR"
+        )
 
 
-def serialize_yson(type_, human_readable=False):
+def serialize_yson(type_: Type, human_readable: bool = False) -> YsonType:
     _check_serialization_available()
 
     if not type_base.is_valid_type(type_):
@@ -441,7 +493,7 @@ def serialize_yson(type_, human_readable=False):
     return yt.yson.dumps(type_, yson_format="pretty" if human_readable else "binary")
 
 
-def deserialize_yson(yson):
+def deserialize_yson(yson: YsonType) -> Type:
     _check_serialization_available()
 
     if type(yson) is six.text_type and six.PY3:
@@ -454,7 +506,7 @@ def deserialize_yson(yson):
         six.raise_from(ValueError("deserialization failed: {}".format(e)), e)
 
 
-def deserialize_yson_v1(yson, required):
+def deserialize_yson_v1(yson: YsonType, required: bool) -> Type:
     _check_serialization_available()
 
     if type(yson) is six.text_type and six.PY3:

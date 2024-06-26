@@ -3,12 +3,8 @@ import yt.logger as logger
 
 import struct
 
-try:
-    import zlib_fork_safe as zlib
-    _ZLIB_FORK_SAFE = True
-except ImportError:
-    import zlib
-    _ZLIB_FORK_SAFE = False
+import zlib
+_ZLIB_FORK_SAFE = False
 
 
 def is_zlib_parallel():
@@ -74,43 +70,37 @@ def _create_zlib_compressor():
 _CODECS["gzip"] = _create_zlib_compressor
 
 
-try:
-    import brotli
+import brotli
 
-    def _create_brotli_compressor(quality=3):
-        inner_compressor = brotli.Compressor(quality=quality)
-        if not hasattr(inner_compressor, "process"):
-            raise YtError("You use outdated version of brotli (probable deprecated package with named 'brotlipy'), "
-                          "please update it (or completely remove)")
-        return _Compressor(inner_compressor.process, inner_compressor.finish)
+def _create_brotli_compressor(quality=3):
+    inner_compressor = brotli.Compressor(quality=quality)
+    if not hasattr(inner_compressor, "process"):
+        raise YtError("You use outdated version of brotli (probable deprecated package with named 'brotlipy'), "
+                      "please update it (or completely remove)")
+    return _Compressor(inner_compressor.process, inner_compressor.finish)
 
-    _CODECS["br"] = _create_brotli_compressor
-except ImportError:
-    pass
+_CODECS["br"] = _create_brotli_compressor
 
-try:
-    import library.python.codecs
+import library.python.codecs
 
-    class _BlockCompressor(object):
-        def __init__(self, name):
-            self._name = name
-            self._codec_id = library.python.codecs.get_codec_id(self._name)
+class _BlockCompressor(object):
+    def __init__(self, name):
+        self._name = name
+        self._codec_id = library.python.codecs.get_codec_id(self._name)
 
-        def __call__(self, obj):
-            if isinstance(obj, bytes):
-                obj_iterator = chunk_iter_string(obj, 2 * GB)
-            else:
-                obj_iterator = obj
+    def __call__(self, obj):
+        if isinstance(obj, bytes):
+            obj_iterator = chunk_iter_string(obj, 2 * GB)
+        else:
+            obj_iterator = obj
 
-            for chunk in obj_iterator:
-                compressed = library.python.codecs.dumps(self._name, chunk)
-                if compressed:
-                    yield struct.pack("<H", self._codec_id)
-                    yield struct.pack("<Q", len(compressed))
-                    yield compressed
-            yield struct.pack("<H", self._codec_id)
-            yield struct.pack("<Q", 0)
+        for chunk in obj_iterator:
+            compressed = library.python.codecs.dumps(self._name, chunk)
+            if compressed:
+                yield struct.pack("<H", self._codec_id)
+                yield struct.pack("<Q", len(compressed))
+                yield compressed
+        yield struct.pack("<H", self._codec_id)
+        yield struct.pack("<Q", 0)
 
-    _CODECS["z-lz4"] = lambda: _BlockCompressor("lz4")
-except ImportError:
-    pass
+_CODECS["z-lz4"] = lambda: _BlockCompressor("lz4")

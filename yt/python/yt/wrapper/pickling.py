@@ -1,7 +1,4 @@
-try:
-    from importlib import import_module
-except ImportError:
-    from yt.packages.importlib import import_module
+from importlib import import_module
 
 import yt
 

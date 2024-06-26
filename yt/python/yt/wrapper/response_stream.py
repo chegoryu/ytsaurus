@@ -5,6 +5,7 @@ from collections.abc import Iterable
 
 class ResponseStream(Iterable):
     """Iterable over response."""
+
     def __init__(self, get_response, iter_content, close, process_error, get_response_parameters):
         self._buffer = b""
         self._buffer_length = 0
@@ -28,18 +29,18 @@ class ResponseStream(Iterable):
                 break
             yield result
 
-    def read(self, length=None):
+    def read(self, length: int | None = None) -> bytes:
         if self._stream_finished:
             return b""
 
         if length is None:
-            length = 2 ** 63
+            length = 2**63
 
         result_strings = []
         if self._pos:
             if self._buffer_length <= self._pos + length:
                 length -= self._buffer_length - self._pos
-                string = self._buffer[self._pos:]
+                string = self._buffer[self._pos :]
                 self._fetch()
                 if self._stream_finished:
                     return string
@@ -48,7 +49,7 @@ class ResponseStream(Iterable):
             else:
                 pos = self._pos
                 self._pos += length
-                return self._buffer[pos:pos + length]
+                return self._buffer[pos : pos + length]
 
         while length > self._buffer_length:
             result_strings.append(self._buffer)
@@ -63,7 +64,7 @@ class ResponseStream(Iterable):
 
         return b"".join(result_strings)
 
-    def readline(self):
+    def readline(self) -> bytes:
         if self._stream_finished:
             return b""
 
@@ -71,11 +72,11 @@ class ResponseStream(Iterable):
         while True:
             index = self._buffer.find(b"\n", self._pos)
             if index != -1:
-                result.append(self._buffer[self._pos: index + 1])
+                result.append(self._buffer[self._pos : index + 1])
                 self._pos = index + 1
                 break
 
-            result.append(self._buffer[self._pos:])
+            result.append(self._buffer[self._pos :])
             self._fetch()
             if self._stream_finished:
                 break
@@ -97,7 +98,7 @@ class ResponseStream(Iterable):
                 return b""
             remaining_buffer = self._buffer
         else:
-            remaining_buffer = self._buffer[self._pos:]
+            remaining_buffer = self._buffer[self._pos :]
 
         self._pos = len(self._buffer)
 
@@ -126,7 +127,7 @@ class ResponseStream(Iterable):
             raise StopIteration()
         return line
 
-    def close(self, from_delete=False):
+    def close(self, from_delete: bool = False):
         if not self._is_closed:
             for action in self._close_actions:
                 action(from_delete)
@@ -138,13 +139,13 @@ class ResponseStream(Iterable):
 
 
 class EmptyResponseStream(Iterable):
-    def read(self, length=None):
+    def read(self, length: int | None = None) -> bytes:
         return b""
 
     def chunk_iter(self):
         return common.EMPTY_GENERATOR
 
-    def readline(self):
+    def readline(self) -> bytes:
         return b""
 
     def close(self):

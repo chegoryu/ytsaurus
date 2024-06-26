@@ -56,9 +56,17 @@ def _is_batch_client(client):
     return isinstance(client, BatchClient)
 
 
-def get(path, max_size=None, attributes=None, format=None, read_from=None,
-        cache_sticky_group_size=None, suppress_transaction_coordinator_sync=None,
-        suppress_upstream_sync=None, client=None):
+def get(
+    path,
+    max_size=None,
+    attributes=None,
+    format=None,
+    read_from=None,
+    cache_sticky_group_size=None,
+    suppress_transaction_coordinator_sync=None,
+    suppress_upstream_sync=None,
+    client=None,
+):
     """Gets Cypress node content (attribute tree).
 
     :param path: path to tree, it must exist!
@@ -74,25 +82,27 @@ def get(path, max_size=None, attributes=None, format=None, read_from=None,
     """
     if max_size is None:
         max_size = 65535
-    params = {
-        "path": YPath(path, client=client),
-        "max_size": max_size}
+    params = {"path": YPath(path, client=client), "max_size": max_size}
     set_param(params, "attributes", attributes)
     set_param(params, "suppress_transaction_coordinator_sync", suppress_transaction_coordinator_sync)
     set_param(params, "suppress_upstream_sync", suppress_upstream_sync)
     set_master_read_params(params, read_from, cache_sticky_group_size)
     if get_api_version(client) == "v4":
         set_param(params, "return_only_value", True)
-    result = make_formatted_request(
-        "get",
-        params=params,
-        format=format,
-        client=client)
+    result = make_formatted_request("get", params=params, format=format, client=client)
     return result
 
 
-def set(path, value, format=None, recursive=False, force=None, suppress_transaction_coordinator_sync=None,
-        suppress_upstream_sync=None, client=None):
+def set(
+    path,
+    value,
+    format=None,
+    recursive=False,
+    force=None,
+    suppress_transaction_coordinator_sync=None,
+    suppress_upstream_sync=None,
+    client=None,
+):
     """Sets new value to Cypress node.
 
     :param path: path.
@@ -116,13 +126,8 @@ def set(path, value, format=None, recursive=False, force=None, suppress_transact
     set_param(params, "recursive", recursive)
     set_param(params, "force", force)
     set_param(params, "suppress_transaction_coordinator_sync", suppress_transaction_coordinator_sync)
-    set_param(params, "suppress_upstream_sync", suppress_upstream_sync)
 
-    return make_request(
-        "set",
-        params,
-        data=value,
-        client=client)
+    return make_request("set", params, data=value, client=client)
 
 
 class _CrosscellCopyMoveRetrier(Retrier):
@@ -136,14 +141,16 @@ class _CrosscellCopyMoveRetrier(Retrier):
         super(_CrosscellCopyMoveRetrier, self).__init__(
             retry_config=retry_config,
             exceptions=get_retriable_errors(),
-            chaos_monkey=default_chaos_monkey(chaos_monkey_enable)
+            chaos_monkey=default_chaos_monkey(chaos_monkey_enable),
         )
 
     def action(self):
         title = "Python wrapper: {}".format(self.method)
         with Transaction(attributes={"title": title}, client=self.client):
             set_param(self.params, "enable_cross_cell_copying", True)
-            return make_formatted_request(self.method, self.params, format=None, allow_retries=False, client=self.client)
+            return make_formatted_request(
+                self.method, self.params, format=None, allow_retries=False, client=self.client
+            )
 
     def except_action(self, error, attempt):
         logger.warning("Copy/move failed with error %s", repr(error))
@@ -170,12 +177,24 @@ class _CrosscellCopyMoveRetrier(Retrier):
                 raise
 
 
-def copy(source_path, destination_path,
-         recursive=None, force=None, ignore_existing=None, lock_existing=None,
-         preserve_account=None, preserve_owner=None, preserve_acl=None,
-         preserve_expiration_time=None, preserve_expiration_timeout=None,
-         preserve_creation_time=None, preserve_modification_time=None,
-         pessimistic_quota_check=None, enable_cross_cell_copying=None, client=None):
+def copy(
+    source_path,
+    destination_path,
+    recursive=None,
+    force=None,
+    ignore_existing=None,
+    lock_existing=None,
+    preserve_account=None,
+    preserve_owner=None,
+    preserve_acl=None,
+    preserve_expiration_time=None,
+    preserve_expiration_timeout=None,
+    preserve_creation_time=None,
+    preserve_modification_time=None,
+    pessimistic_quota_check=None,
+    enable_cross_cell_copying=None,
+    client=None,
+):
     """Copies Cypress node.
 
     :param source_path: source path.
@@ -198,8 +217,10 @@ def copy(source_path, destination_path,
 
     .. seealso:: `copy in the docs <https://ytsaurus.tech/docs/en/api/commands#copy>`_
     """
-    params = {"source_path": YPath(source_path, client=client),
-              "destination_path": YPath(destination_path, client=client)}
+    params = {
+        "source_path": YPath(source_path, client=client),
+        "destination_path": YPath(destination_path, client=client),
+    }
 
     recursive = get_value(recursive, get_config(client)["yamr_mode"]["create_recursive"])
     set_param(params, "recursive", recursive)
@@ -214,6 +235,7 @@ def copy(source_path, destination_path,
     set_param(params, "preserve_creation_time", preserve_creation_time)
     set_param(params, "preserve_modification_time", preserve_modification_time)
     set_param(params, "pessimistic_quota_check", pessimistic_quota_check)
+    set_param(params, "enable_cross_cell_copying", enable_cross_cell_copying)
 
     if _is_batch_client(client) or enable_cross_cell_copying is not None:
         set_param(params, "enable_cross_cell_copying", enable_cross_cell_copying)
@@ -222,12 +244,21 @@ def copy(source_path, destination_path,
         return _CrosscellCopyMoveRetrier.copy(params, client)
 
 
-def move(source_path, destination_path,
-         recursive=None, force=None,
-         preserve_account=None, preserve_owner=None,
-         preserve_expiration_time=None, preserve_expiration_timeout=None,
-         preserve_creation_time=None, preserve_modification_time=None,
-         pessimistic_quota_check=None, enable_cross_cell_copying=None, client=None):
+def move(
+    source_path,
+    destination_path,
+    recursive=None,
+    force=None,
+    preserve_account=None,
+    preserve_owner=None,
+    preserve_expiration_time=None,
+    preserve_expiration_timeout=None,
+    preserve_creation_time=None,
+    preserve_modification_time=None,
+    pessimistic_quota_check=None,
+    enable_cross_cell_copying=None,
+    client=None,
+):
     """Moves (renames) Cypress node.
 
     :param source_path: source path.
@@ -247,8 +278,10 @@ def move(source_path, destination_path,
 
     .. seealso:: `move in the docs <https://ytsaurus.tech/docs/en/api/commands#move>`_
     """
-    params = {"source_path": YPath(source_path, client=client),
-              "destination_path": YPath(destination_path, client=client)}
+    params = {
+        "source_path": YPath(source_path, client=client),
+        "destination_path": YPath(destination_path, client=client),
+    }
 
     recursive = get_value(recursive, get_config(client)["yamr_mode"]["create_recursive"])
     set_param(params, "recursive", recursive)
@@ -260,6 +293,7 @@ def move(source_path, destination_path,
     set_param(params, "preserve_creation_time", preserve_creation_time)
     set_param(params, "preserve_modification_time", preserve_modification_time)
     set_param(params, "pessimistic_quota_check", pessimistic_quota_check)
+    set_param(params, "enable_cross_cell_copying", enable_cross_cell_copying)
 
     if _is_batch_client(client) or enable_cross_cell_copying is not None:
         set_param(params, "enable_cross_cell_copying", enable_cross_cell_copying)
@@ -277,17 +311,17 @@ class _ConcatenateRetrier(Retrier):
 
         retry_config = get_config(client)["concatenate_retries"]
         chaos_monkey_enable = get_option("_ENABLE_HEAVY_REQUEST_CHAOS_MONKEY", client)
-        super(_ConcatenateRetrier, self).__init__(retry_config=retry_config,
-                                                  exceptions=get_retriable_errors(),
-                                                  chaos_monkey=default_chaos_monkey(chaos_monkey_enable))
+        super(_ConcatenateRetrier, self).__init__(
+            retry_config=retry_config,
+            exceptions=get_retriable_errors(),
+            chaos_monkey=default_chaos_monkey(chaos_monkey_enable),
+        )
 
     def action(self):
         title = "Python wrapper: concatenate"
-        with Transaction(attributes={"title": title},
-                         client=self.client):
+        with Transaction(attributes={"title": title}, client=self.client):
             create(self.type, self.destination_path, ignore_existing=True, client=self.client)
-            params = {"source_paths": self.source_paths,
-                      "destination_path": self.destination_path}
+            params = {"source_paths": self.source_paths, "destination_path": self.destination_path}
             make_request("concatenate", params, client=self.client)
 
     def except_action(self, error, attempt):
@@ -314,8 +348,16 @@ def concatenate(source_paths, destination_path, client=None):
     retrier.run()
 
 
-def link(target_path, link_path, recursive=False, ignore_existing=False, lock_existing=None,
-         force=False, attributes=None, client=None):
+def link(
+    target_path,
+    link_path,
+    recursive=False,
+    ignore_existing=False,
+    lock_existing=None,
+    force=False,
+    attributes=None,
+    client=None,
+):
     """Makes link to Cypress node.
 
     :param target_path: target path.
@@ -338,17 +380,22 @@ def link(target_path, link_path, recursive=False, ignore_existing=False, lock_ex
     set_param(params, "lock_existing", lock_existing)
     set_param(params, "force", force)
     set_param(params, "attributes", attributes)
-    return make_formatted_request(
-        "link",
-        params,
-        format=None,
-        client=client)
+    return make_formatted_request("link", params, format=None, client=client)
 
 
-def list(path,
-         max_size=None, format=None, absolute=None, attributes=None, sort=True, read_from=None,
-         cache_sticky_group_size=None, suppress_transaction_coordinator_sync=None,
-         suppress_upstream_sync=None, client=None):
+def list(
+    path,
+    max_size=None,
+    format=None,
+    absolute=None,
+    attributes=None,
+    sort=True,
+    read_from=None,
+    cache_sticky_group_size=None,
+    suppress_transaction_coordinator_sync=None,
+    suppress_upstream_sync=None,
+    client=None,
+):
     """Lists directory (map_node) content. Node type must be "map_node".
 
     :param path: path.
@@ -387,20 +434,13 @@ def list(path,
     if max_size is None:
         max_size = 65535
 
-    params = {
-        "path": YPath(path, client=client),
-        "max_size": max_size}
+    params = {"path": YPath(path, client=client), "max_size": max_size}
     set_param(params, "attributes", attributes)
     set_param(params, "suppress_transaction_coordinator_sync", suppress_transaction_coordinator_sync)
-    set_param(params, "suppress_upstream_sync", suppress_upstream_sync)
     set_master_read_params(params, read_from, cache_sticky_group_size)
     if get_api_version(client) == "v4":
         set_param(params, "return_only_value", True)
-    result = make_formatted_request(
-        "list",
-        params=params,
-        format=format,
-        client=client)
+    result = make_formatted_request("list", params=params, format=format, client=client)
     return apply_function_to_result(_process_result, result)
 
 
@@ -412,16 +452,14 @@ def exists(path, read_from=None, cache_sticky_group_size=None, suppress_transact
 
     .. seealso:: `exists in the docs <https://ytsaurus.tech/docs/en/api/commands#exists>`_
     """
+
     def _process_result(result):
         return result["value"] if get_api_version(client) == "v4" else result
+
     params = {"path": YPath(path, client=client)}
     set_master_read_params(params, read_from, cache_sticky_group_size)
     set_param(params, "suppress_transaction_coordinator_sync", suppress_transaction_coordinator_sync)
-    result = make_formatted_request(
-        "exists",
-        params,
-        format=None,
-        client=client)
+    result = make_formatted_request("exists", params, format=None, client=client)
     return apply_function_to_result(_process_result, result)
 
 
@@ -443,8 +481,16 @@ def remove(path, recursive=False, force=False, client=None):
     return make_request("remove", params, client=client)
 
 
-def create(type, path=None, recursive=False, ignore_existing=False, lock_existing=None,
-           force=None, attributes=None, client=None):
+def create(
+    type,
+    path=None,
+    recursive=False,
+    ignore_existing=False,
+    lock_existing=None,
+    force=None,
+    attributes=None,
+    client=None,
+):
     """Creates Cypress node.
 
     :param str type: one of ["table", "file", "map_node", "list_node", ...].
@@ -501,9 +547,7 @@ def internalize(path, client=None):
     :param path: path.
     :type path: str or :class:`YPath <yt.wrapper.ypath.YPath>`
     """
-    params = {
-        "path": YPath(path, client=client)
-    }
+    params = {"path": YPath(path, client=client)}
     return make_request("internalize", params, client=client)
 
 
@@ -532,6 +576,7 @@ def get_attribute(path, attribute, default=_KWARG_SENTINEL, client=None):
     :param str attribute: attribute.
     :param default: if node hasn't attribute `attribute` this value will be returned.
     """
+
     def process_default_value(result, raw_error):
         if raw_error is not None:
             error = YtResponseError(raw_error)
@@ -544,10 +589,7 @@ def get_attribute(path, attribute, default=_KWARG_SENTINEL, client=None):
     attribute_path = "{0}/@{1}".format(YPath(path, client=client), attribute)
 
     if _is_batch_client(client):
-        return apply_function_to_result(
-            process_default_value,
-            get(attribute_path, client=client),
-            include_error=True)
+        return apply_function_to_result(process_default_value, get(attribute_path, client=client), include_error=True)
     else:
         try:
             return get(attribute_path, client=client)
@@ -611,10 +653,23 @@ def find_free_subpath(path, client=None):
             return name
 
 
-def search(root="", node_type=None, path_filter=None, object_filter=None, subtree_filter=None,
-           map_node_order=MAP_ORDER_SORTED, list_node_order=None, attributes=None,
-           exclude=None, depth_bound=None, follow_links=False, read_from=None, cache_sticky_group_size=None,
-           enable_batch_mode=None, client=None):
+def search(
+    root="",
+    node_type=None,
+    path_filter=None,
+    object_filter=None,
+    subtree_filter=None,
+    map_node_order=MAP_ORDER_SORTED,
+    list_node_order=None,
+    attributes=None,
+    exclude=None,
+    depth_bound=None,
+    follow_links=False,
+    read_from=None,
+    cache_sticky_group_size=None,
+    enable_batch_mode=None,
+    client=None,
+):
     """Searches for some nodes in Cypress subtree.
 
     :param root: path to search.
@@ -641,11 +696,13 @@ def search(root="", node_type=None, path_filter=None, object_filter=None, subtre
     from .batch_helpers import create_batch_client
 
     if map_node_order is MAP_ORDER_SORTED:
+
         def _convert_to_unicode(str_obj):
             if is_unicode(str_obj):
                 return str_obj
             return get_bytes(str_obj).decode("utf-8", "replace")
-        map_node_order = lambda path, obj: sorted(obj, key=_convert_to_unicode)  # noqa
+
+        map_node_order = lambda path, obj: sorted(obj, key=_convert_to_unicode)
 
     encoding = get_structured_format(format=None, client=client)._encoding
 
@@ -684,8 +741,9 @@ def search(root="", node_type=None, path_filter=None, object_filter=None, subtre
         enable_batch_mode = get_config(client)["enable_batch_mode_for_search"]
 
     class CompositeNode(object):
-        def __init__(self, path, depth, content=None, ignore_opaque=False,
-                     ignore_resolve_error=True, force_search=False):
+        def __init__(
+            self, path, depth, content=None, ignore_opaque=False, ignore_resolve_error=True, force_search=False
+        ):
             self.path = path
             self.depth = depth
             self.ignore_opaque = ignore_opaque
@@ -700,19 +758,19 @@ def search(root="", node_type=None, path_filter=None, object_filter=None, subtre
         node.content = None
         if error.is_access_denied():
             logger.warning("Cannot traverse %s, access denied" % node.path)
-            return True
         elif error.is_resolve_error() and node.ignore_resolve_error:
             logger.warning("Path %s is missing" % node.path)
-            return True
         else:
-            return False
+            raise
 
     def is_opaque(content):
         # We have bug that get to document don't return attributes.
-        return \
-            content.attributes.get(to_response_key_type("opaque"), False) and \
-            to_native_string(content.attributes[to_response_key_type("type")]) != "document" or \
-            to_native_string(content.attributes[to_response_key_type("type")]) in ("account_map", "tablet_cell", "portal_entrance")
+        return (
+            content.attributes.get(to_response_key_type("opaque"), False)
+            and to_native_string(content.attributes[to_response_key_type("type")]) != "document"
+            or to_native_string(content.attributes[to_response_key_type("type")])
+            in ("account_map", "tablet_cell", "portal_entrance")
+        )
 
     def safe_batch_get(nodes, batch_client):
         get_result = []
@@ -722,7 +780,9 @@ def search(root="", node_type=None, path_filter=None, object_filter=None, subtre
                     node.path,
                     attributes=request_attributes,
                     read_from=read_from,
-                    cache_sticky_group_size=cache_sticky_group_size))
+                    cache_sticky_group_size=cache_sticky_group_size,
+                )
+            )
         batch_client.commit_batch()
 
         for content, node in zip(get_result, nodes):
@@ -731,8 +791,7 @@ def search(root="", node_type=None, path_filter=None, object_filter=None, subtre
                     raise YtResponseError(content.get_error())
                 node.content = content.get_result()
             except YtResponseError as rsp:
-                if not process_response_error(rsp, node):
-                    raise
+                process_response_error(rsp, node)
             yield node
 
     def safe_get(nodes, client):
@@ -743,10 +802,10 @@ def search(root="", node_type=None, path_filter=None, object_filter=None, subtre
                     attributes=request_attributes,
                     client=client,
                     read_from=read_from,
-                    cache_sticky_group_size=cache_sticky_group_size)
+                    cache_sticky_group_size=cache_sticky_group_size,
+                )
             except YtResponseError as rsp:
-                if not process_response_error(rsp, node):
-                    raise
+                process_response_error(rsp, node)
             yield node
 
     if enable_batch_mode:
@@ -777,7 +836,7 @@ def search(root="", node_type=None, path_filter=None, object_filter=None, subtre
         if node.followed_by_link and object_type == "link":
             return
 
-        depth_limit_reached = (depth_bound is not None and node.depth == depth_bound)
+        depth_limit_reached = depth_bound is not None and node.depth == depth_bound
         if is_opaque(node.content) and not node.ignore_opaque and object_type != "link" and not depth_limit_reached:
             new_node = shallowcopy(node)
             new_node.ignore_opaque = True
@@ -791,12 +850,13 @@ def search(root="", node_type=None, path_filter=None, object_filter=None, subtre
             new_node.ignore_opaque = True
             nodes_to_request.append(new_node)
 
-        if node.yield_path and \
-                (node_type is None or object_type in flatten(node_type)) and \
-                (object_filter is None or object_filter(node.content)) and \
-                (path_filter is None or path_filter(node.path)):
-            yson_path_attributes = dict(filter(lambda item: item[0] in attributes,
-                                               node.content.attributes.items()))
+        if (
+            node.yield_path
+            and (node_type is None or object_type in flatten(node_type))
+            and (object_filter is None or object_filter(node.content))
+            and (path_filter is None or path_filter(node.path))
+        ):
+            yson_path_attributes = dict(filter(lambda item: item[0] in attributes, iteritems(node.content.attributes)))
             yson_path = yson.to_yson_type(node.path, attributes=yson_path_attributes)
             yield yson_path
 
@@ -816,8 +876,7 @@ def search(root="", node_type=None, path_filter=None, object_filter=None, subtre
 
         if isinstance(node.content, builtins.list):
             if list_node_order is not None:
-                enumeration = ((index, node.content[index]) for index in list_node_order(
-                    node.path, node.content))
+                enumeration = ((index, node.content[index]) for index in list_node_order(node.path, node.content))
             else:
                 enumeration = enumerate(node.content)
             for index, value in enumeration:
@@ -828,11 +887,9 @@ def search(root="", node_type=None, path_filter=None, object_filter=None, subtre
     nodes_to_request = []
     nodes_to_request.append(
         CompositeNode(
-            to_response_key_type(root),
-            0,
-            ignore_opaque=True,
-            ignore_resolve_error=ignore_root_path_resolve_error
-        ))
+            to_response_key_type(root), 0, ignore_opaque=True, ignore_resolve_error=ignore_root_path_resolve_error
+        )
+    )
 
     while nodes_to_request:
         if enable_batch_mode:
@@ -866,8 +923,12 @@ def remove_with_empty_dirs(path, force=True, client=None):
 
         path = ypath_dirname(path)
         try:
-            if str(path) == "//" or not exists(path, client=client) or \
-                    list(path, client=client) or get(path + "/@acl", client=client):
+            if (
+                str(path) == "//"
+                or not exists(path, client=client)
+                or list(path, client=client)
+                or get(path + "/@acl", client=client)
+            ):
                 break
         except YtResponseError as err:
             if err.is_resolve_error():
@@ -902,9 +963,11 @@ def get_table_schema(table_path, client=None):
 
     node_type = attributes["type"]
     if node_type != "table":
-        raise YtError("Can't get schema for node '{path}' with type '{node_type}' ('table' is expected)".format(
-            path=table_path,
-            node_type=node_type,
-        ))
+        raise YtError(
+            "Can't get schema for node '{path}' with type '{node_type}' ('table' is expected)".format(
+                path=table_path,
+                node_type=node_type,
+            )
+        )
 
     return TableSchema.from_yson_type(attributes["schema"])

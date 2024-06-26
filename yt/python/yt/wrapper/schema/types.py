@@ -11,54 +11,21 @@ import copy
 import datetime
 import types
 
-from ...type_info.type_base import Primitive
-
-try:
-    import typing
-except ImportError:
-    import yt.packages.typing as typing
-
+import typing
 
 import yt.type_info as ti
+from yt.type_info.type_base import Type as TypeBase, Primitive
 
+import dataclasses
 
-try:
-    import dataclasses
-except ImportError:
-    pass
+from typing import Annotated, Callable, Protocol, Type, Union
 
-
-if is_schema_module_available():
-    try:
-        from yt.packages.typing_extensions import Annotated, Protocol
-    except ImportError:
-        from typing_extensions import Annotated, Protocol
-else:
-    Protocol = object
-
-
-if typing.TYPE_CHECKING:
-    import typing
-    from typing_extensions import dataclass_transform
-else:
-    if is_schema_module_available():
-        try:
-            from yt.packages.typing_extensions import dataclass_transform
-        except ImportError:
-            from typing_extensions import dataclass_transform
-    else:
-        def dataclass_transform():
-            return lambda x: x
-
-
-_T = typing.TypeVar('_T')
+from typing import dataclass_transform, TypeVar
 
 
 @dataclass_transform()
 def yt_dataclass(cls):
-    # type: (typing.Type[_T]) -> typing.Type[_T]
-    """ Decorator for classes representing table rows and embedded structures.
-    """
+    """Decorator for classes representing table rows and embedded structures."""
     check_schema_module_available()
     dataclass_cls = dataclasses.dataclass(cls)
 
@@ -99,7 +66,15 @@ class Annotation:
         return "Annotation({})".format(self._ti_type)
 
 
-def create_annotated_type(py_type, ti_type, to_yt_type=None, from_yt_type=None):
+T = TypeVar("T")
+
+
+def create_annotated_type(
+    py_type: typing.Type[T],
+    ti_type: TypeBase,
+    to_yt_type: Callable[[T], typing.Any] | None = None,
+    from_yt_type: Callable[..., T] | None = None,
+) -> typing.Type[T]:
     """
     Create an alias of a python type `py_type` that will correspond to `ti_type`
     in table schemas.
@@ -108,8 +83,7 @@ def create_annotated_type(py_type, ti_type, to_yt_type=None, from_yt_type=None):
     if not ti.is_valid_type(ti_type):
         raise TypeError("Expected ti_type to be a type_info type")
     if not _is_py_type_compatible_with_ti_type(py_type, ti_type) and (not to_yt_type or not from_yt_type):
-        raise YtError('Python type {} is not compatible with type "{}" from annotation'
-                      .format(py_type, ti_type))
+        raise YtError('Python type {} is not compatible with type "{}" from annotation'.format(py_type, ti_type))
     return Annotated[py_type, Annotation(ti_type, to_yt_type=to_yt_type, from_yt_type=from_yt_type)]
 
 
@@ -154,7 +128,9 @@ def create_yt_enum(
             if ti_type is not None:
                 break
         if ti_type is None:
-            raise YtError(f"Enum {py_type} doesn't have default ti_type representation. Set the ti_type param explicitly")
+            raise YtError(
+                f"Enum {py_type} doesn't have default ti_type representation. Set the ti_type param explicitly"
+            )
 
     def _default_from_yt_type(value: typing.Any) -> _Enum:
         return py_type(value)
@@ -191,10 +167,12 @@ def _is_py_type_optional(py_type):
 
 def _is_py_type_optional_old_style(py_type):
     args = getattr(py_type, "__args__", [])
-    return getattr(py_type, "__module__", None) == "typing" and \
-        getattr(py_type, "__origin__", None) == typing.Union and \
-        len(args) == 2 and \
-        args[-1] == type(None)  # noqa
+    return (
+        getattr(py_type, "__module__", None) == "typing"
+        and getattr(py_type, "__origin__", None) == typing.Union
+        and len(args) == 2
+        and args[-1] == type(None)
+    )  # noqa
 
 
 def _is_py_type_optional_new_style(py_type):
@@ -209,10 +187,16 @@ def _get_integer_info():
         return _get_integer_info._info
     check_schema_module_available()
     unsigned = {
-        ti.Uint8, ti.Uint16, ti.Uint32, ti.Uint64,
+        ti.Uint8,
+        ti.Uint16,
+        ti.Uint32,
+        ti.Uint64,
     }
     signed = {
-        ti.Int8, ti.Int16, ti.Int32, ti.Int64,
+        ti.Int8,
+        ti.Int16,
+        ti.Int32,
+        ti.Int64,
     }
     bit_width = {
         ti.Int8: 8,
@@ -259,7 +243,7 @@ def _get_py_time_types():
     return _get_py_time_types._info
 
 
-def _get_default_ti_types() -> typing.Dict[type, Primitive]:
+def _get_default_ti_types() -> dict[type, Primitive]:
     return {
         int: ti.Int64,
         str: ti.Utf8,
@@ -318,11 +302,8 @@ def _check_ti_types_compatible(src_type, dst_type, field_path):
             raise_incompatible()
 
 
-if Protocol is not object:
-    class _YtDataclassProtocol(Protocol):
-        _YT_DATACLASS_MARKER = None
-else:
-    _YtDataclassProtocol = None
+class _YtDataclassProtocol(Protocol):
+    _YT_DATACLASS_MARKER = None
 
 
 YtDataclassType = typing.TypeVar('YtDataclassType', bound=_YtDataclassProtocol)
@@ -335,85 +316,104 @@ class OutputRow(typing.Generic[YtDataclassType]):
 
     __slots__ = ("_row", "_table_index")
 
-    def __init__(self, row, table_index=0):
+    def __init__(self, row: YtDataclassType, table_index: int = 0):
         self._row = row
         self._table_index = table_index
 
 
-class RowIteratorProtocol(typing.Iterable[YtDataclassType]):
-    def with_context():
-        pass
-
-
 class ContextProtocol(Protocol):
-    def get_table_index():
+    def get_table_index(self) -> int:
         pass
 
-    def get_row_index():
+    def get_row_index(self) -> int:
         pass
 
-    def get_range_index():
+    def get_range_index(self) -> int:
         pass
 
 
-if is_schema_module_available():
-    Int8 = create_annotated_type(int, ti.Int8)
-    Int16 = create_annotated_type(int, ti.Int16)
-    Int32 = create_annotated_type(int, ti.Int32)
-    Int64 = create_annotated_type(int, ti.Int64)
+class RowIteratorProtocol(typing.Iterable[YtDataclassType]):
+    def with_context(self) -> typing.Iterable[tuple[YtDataclassType, ContextProtocol]]:
+        pass
 
-    Uint8 = create_annotated_type(int, ti.Uint8)
-    Uint16 = create_annotated_type(int, ti.Uint16)
-    Uint32 = create_annotated_type(int, ti.Uint32)
-    Uint64 = create_annotated_type(int, ti.Uint64)
 
-    Float = create_annotated_type(float, ti.Float)
-    Double = create_annotated_type(float, ti.Double)
+Int8 = int
+Int16 = int
+Int32 = int
+Int64 = int
 
-    Date = create_annotated_type(int, ti.Date)
-    Datetime = create_annotated_type(int, ti.Datetime)
-    Timestamp = create_annotated_type(int, ti.Timestamp)
-    Interval = create_annotated_type(int, ti.Interval)
 
-    YsonBytes = create_annotated_type(bytes, ti.Yson)
+Uint8 = int
+Uint16 = int
+Uint32 = int
+Uint64 = int
 
-    OtherColumns = skiff.SkiffOtherColumns
+Float = float
+Double = float
 
-    class FormattedPyDatetime:
-        """
-        Generic type for annotating yt_dataclass fields that parses a string column with date and/or time
-        in datetime.datetime using specified pattern (generic parameter).
+Date = Union[int, datetime.date]
+Datetime = Union[int, datetime.datetime]
+Timestamp = Union[int, datetime.datetime]
+Interval = Union[int, datetime.timedelta]
 
-        Example:
-        ```
-            @yt.yt_dataclass
-            class Row:
-                date: FormattedPyDatetime["%Y-%m-%d"]
+YsonBytes = bytes
 
-            yt.write_table_structured(table, Row, [Row(date=datetime.datetime(year=2010, month=10, day=29))])
-            list(yt.read_table(table))
-            > [{'date': '2010-10-29'}]
-        ```
-        """
-        def __class_getitem__(cls, format):
-            if type(format) is not str:
-                raise TypeError("The datetime format must be a string")
+# Int8: Type[int] = create_annotated_type(int, ti.Int8)
+# Int16: Type[int] = create_annotated_type(int, ti.Int16)
+# Int32: Type[int] = create_annotated_type(int, ti.Int32)
+# Int64: Type[int] = create_annotated_type(int, ti.Int64)
+#
+# Uint8: Type[int] = create_annotated_type(int, ti.Uint8)
+# Uint16: Type[int] = create_annotated_type(int, ti.Uint16)
+# Uint32: Type[int] = create_annotated_type(int, ti.Uint32)
+# Uint64: Type[int] = create_annotated_type(int, ti.Uint64)
+#
+# Date: Type[int | datetime.date] = create_annotated_type(int, ti.Date)
+# Datetime: Type[int | datetime.datetime] = create_annotated_type(int, ti.Datetime)
+# Timestamp: Type[int | datetime.datetime] = create_annotated_type(int, ti.Timestamp)
+# Interval: Type[int | datetime.timedelta] = create_annotated_type(int, ti.Interval)
+#
+# YsonBytes: Type[bytes] = create_annotated_type(bytes, ti.Yson)
 
-            def to_yt_type(datetime_):
-                return datetime_.strftime(format).encode("UTF-8")
+OtherColumns = skiff.SkiffOtherColumns
 
-            def from_yt_type(byte_string):
-                datetime_ = datetime.datetime.strptime(byte_string.decode("UTF-8"), format)
-                return datetime_
 
-            return create_annotated_type(datetime.datetime, ti.String, to_yt_type, from_yt_type)
+class FormattedPyDatetime:
+    """
+    Generic type for annotating yt_dataclass fields that parses a string column with date and/or time
+    in datetime.datetime using specified pattern (generic parameter).
 
-        @classmethod
-        def _name(cls):
-            return "{module}.{classname}".format(module=cls.__module__, classname=cls.__qualname__)
+    Example:
+    ```
+        @yt.yt_dataclass
+        class Row:
+            date: FormattedPyDatetime["%Y-%m-%d"]
 
-        def __new__(cls, *args, **kwargs):
-            raise TypeError("Type {} cannot be instantiated".format(FormattedPyDatetime._name()))
+        yt.write_table_structured(table, Row, [Row(date=datetime.datetime(year=2010, month=10, day=29))])
+        list(yt.read_table(table))
+        > [{'date': '2010-10-29'}]
+    ```
+    """
 
-        def __init_subclass__(cls, *args, **kwargs):
-            raise TypeError("{} cannot be subclassed".format(FormattedPyDatetime._name()))
+    def __class_getitem__(cls, format):
+        if type(format) is not str:
+            raise TypeError("The datetime format must be a string")
+
+        def to_yt_type(datetime_):
+            return datetime_.strftime(format).encode("UTF-8")
+
+        def from_yt_type(byte_string):
+            datetime_ = datetime.datetime.strptime(byte_string.decode("UTF-8"), format)
+            return datetime_
+
+        return create_annotated_type(datetime.datetime, ti.String, to_yt_type, from_yt_type)
+
+    @classmethod
+    def _name(cls):
+        return "{module}.{classname}".format(module=cls.__module__, classname=cls.__qualname__)
+
+    def __new__(cls, *args, **kwargs):
+        raise TypeError("Type {} cannot be instantiated".format(FormattedPyDatetime._name()))
+
+    def __init_subclass__(cls, *args, **kwargs):
+        raise TypeError("{} cannot be subclassed".format(FormattedPyDatetime._name()))

@@ -73,7 +73,7 @@ class FrozenDict(Mapping):
 
     def __repr__(self):
         cls = self.__class__.__name__
-        items = ", ".join(map(repr, self._store.items()))
+        items = ", ".join(imap(repr, self._store.items()))
         return "{0}({1})".format(cls, items)
 
     def pop(self, key, default=None):

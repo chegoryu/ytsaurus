@@ -2,10 +2,7 @@
     Copy-pasted from mapreducelib.py with some additions.
 """
 
-try:
-    from itertools import ifilter
-except ImportError:  # Python 3
-    ifilter = filter
+ifilter = filter
 
 
 class SimpleRecord:

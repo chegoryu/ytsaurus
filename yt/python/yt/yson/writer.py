@@ -43,22 +43,13 @@ from .common import (YsonError,
                      FALSE_MARKER, TRUE_MARKER, UINT64_MARKER)
 from . import yson_types
 
-try:
-    from yt.packages.six.moves import map as imap
-    from yt.packages.six import (integer_types, text_type, binary_type,
-                                 iteritems, iterkeys, iterbytes, PY3)
-except ImportError:
-    from six.moves import map as imap
-    from six import (integer_types, text_type, binary_type,
-                     iteritems, iterkeys, iterbytes, PY3)
+from six.moves import map as imap
+from six import (integer_types, text_type, binary_type,
+                 iteritems, iterkeys, iterbytes, PY3)
 
 import math
 import struct
-# Python3 compatibility
-try:
-    from collections.abc import Iterable, Mapping
-except ImportError:
-    from collections import Iterable, Mapping
+from collections.abc import Iterable, Mapping
 
 __all__ = ["dump", "dumps"]
 

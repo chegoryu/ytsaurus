@@ -1,9 +1,6 @@
 from yt.common import YtError
 
-try:
-    from yt.packages.six import int2byte, indexbytes
-except ImportError:
-    from six import int2byte, indexbytes
+from six import int2byte, indexbytes
 
 
 class YsonError(YtError):
@@ -56,7 +53,6 @@ class StreamWrap(object):
 
         if self.state == 3:
             return b""
-
 
 _ENCODING_SENTINEL = object()
 

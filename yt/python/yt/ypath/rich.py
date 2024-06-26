@@ -23,10 +23,7 @@ from yt.yson.parser import YsonParser
 from yt.yson.common import StreamWrap
 from yt.common import flatten, update_inplace
 
-try:
-    from yt.packages.six import BytesIO, PY3, text_type
-except ImportError:
-    from six import BytesIO, PY3, text_type
+from six import BytesIO, PY3, text_type
 
 
 class ReadLimit(object):

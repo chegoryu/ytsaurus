@@ -18,15 +18,11 @@ class ClientState(object):
             # in some cases (global termination), objects may have already been destroyed
             pass
 
-    def _cleanup(self):
-        if self._requests_session:
-            self._requests_session.close()
-
     def _init_state(self):
         self.COMMAND_PARAMS = {
             "transaction_id": "0-0-0-0",
             "ping_ancestor_transactions": False,
-            "suppress_transaction_coordinator_sync": False
+            "suppress_transaction_coordinator_sync": False,
         }
         self._ENABLE_READ_TABLE_CHAOS_MONKEY = False
         self._ENABLE_HTTP_CHAOS_MONKEY = False
@@ -37,7 +33,7 @@ class ClientState(object):
         self._transaction_stack = None
         self._driver = None
         self._requests_session = None  # type: requests.Session
-        self._requests_session_origin_id = None
+        self._requests_session_origin = None
         self._heavy_proxy_provider_state = None
 
         # socket.getfqdn can be slow so client fqdn is cached.

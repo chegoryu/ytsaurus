@@ -47,28 +47,30 @@ class _VariantGenericAlias(GenericAlias):
         return func, (Variant, args)
 
 
-class Variant:
-    """
-    Variant type; Variant[T1, T2, ..., TN] matches any type of T1, T2, ..., TN.
+# class Variant:
+#     """
+#     Variant type; Variant[T1, T2, ..., TN] matches any type of T1, T2, ..., TN.
+#
+#     Variant is just like typing.Union, but leaves type list unchanged
+#     (i.e. not flatten and do not removes duplicates)
+#     """
+#     def __class_getitem__(cls, parameters):
+#         if parameters == ():
+#             raise TypeError("Cannot make a Variant of no types.")
+#
+#         if not isinstance(parameters, tuple):
+#             parameters = (parameters,)
+#
+#         return _VariantGenericAlias(cls, parameters)
+#
+#     @classmethod
+#     def _name(cls):
+#         return "{module}.{classname}".format(module=cls.__module__, classname=cls.__qualname__)
+#
+#     def __new__(cls, *args, **kwargs):
+#         raise TypeError("Type {} cannot be instantiated".format(Variant._name()))
+#
+#     def __init_subclass__(cls, *args, **kwargs):
+#         raise TypeError("{} cannot be subclassed".format(Variant._name()))
 
-    Variant is just like typing.Union, but leaves type list unchanged
-    (i.e. not flatten and do not removes duplicates)
-    """
-    def __class_getitem__(cls, parameters):
-        if parameters == ():
-            raise TypeError("Cannot make a Variant of no types.")
-
-        if not isinstance(parameters, tuple):
-            parameters = (parameters,)
-
-        return _VariantGenericAlias(cls, parameters)
-
-    @classmethod
-    def _name(cls):
-        return "{module}.{classname}".format(module=cls.__module__, classname=cls.__qualname__)
-
-    def __new__(cls, *args, **kwargs):
-        raise TypeError("Type {} cannot be instantiated".format(Variant._name()))
-
-    def __init_subclass__(cls, *args, **kwargs):
-        raise TypeError("{} cannot be subclassed".format(Variant._name()))
+Variant = typing.Union
