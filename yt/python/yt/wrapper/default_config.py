@@ -673,6 +673,15 @@ default_config = {
     # i.e. do not throw exception while declare "weak" reading (f.e. read Optional[int] into int)
     # but throw excepion while reading bad data (if None really occurs)
     "runtime_type_validation": False,
+
+    # Strawberry controller address.
+    # May contain {stage}, {family} and {host_suffix} parameters.
+    # NB: this option can be overridden with settings from cluster.
+    "strawberry_ctl_address": RemotePatchableString("{stage}.{family}-ctl{host_suffix}", "strawberry_ctl_address"),
+    # Cluster name under which the cluster is configured in the strawberry controller.
+    # If |None|, the proxy url is used.
+    # NB: this option can be overridden with settings from cluster.
+    "strawberry_cluster_name": RemotePatchableString(None, "strawberry_cluster_name"),
 }
 
 # pydoc :: default_config :: end
@@ -782,7 +791,7 @@ SHORTCUTS = {
     "USE_YAMR_DEFAULTS": "yamr_mode/use_yamr_defaults",
     "IGNORE_EMPTY_TABLES_IN_MAPREDUCE_LIST": "yamr_mode/ignore_empty_tables_in_mapreduce_list",
 
-     "CONFIG_PROFILE": "config_profile",
+    "CONFIG_PROFILE": "config_profile",
 }
 
 
